@@ -1,4 +1,4 @@
-name := "bigraphs"
+name := "soccog"
 
 organization := "uk.ac.ed.inf"
 

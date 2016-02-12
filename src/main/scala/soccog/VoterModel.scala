@@ -4,15 +4,12 @@ package soccog
 import scala.collection.mutable
 import scala.util.Random
 
-object VoterModel {
-
-  val temperature = 1.0
-  val social = 1.0
-  val cognitive = 1.0
-
-  val numSteps = 1000
-  val numConcepts = 10
-  val numNodes = 100
+class VoterModel(
+  val social: Double = 1.0,
+  val cognitive: Double = 1.0,
+  val temperature: Double = 1.0,
+  val numNodes: Int = 100,
+  val numConcepts: Int = 10) {
 
   val nodes: Array[Node] = Array.fill(numNodes)(new Node)
 
@@ -94,31 +91,6 @@ object VoterModel {
     diffenergy
   }
 
-  def verboseEnergy: Double = {
-    val nn = nodes.zipWithIndex.toMap
-    var e = 0.0
-    for (x <- nodes) {
-      println(nn(x))
-      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
-        println(s"  $i $j: ${x.beliefs(i)(j)}")
-        var d = e
-        for (k <- (j+1) until numConcepts) {
-          println(s"    $k: ${x.beliefs(j)(k)} ${x.beliefs(k)(i)}")
-          e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-        }
-        println(s"    ${e-d}"); d = e
-        for (y <- x.friends) {
-          // divided by 2, otherwise we are double counting
-          // the contribution of each link
-          println(s"    ${nn(y)}: ${y.beliefs(i)(j)}")
-          e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
-        }
-        println(s"    ${e-d}")
-      }
-    }
-    e
-  }
-
   def energy: Double = {
     var e = 0.0
     for (x <- nodes) {
@@ -134,55 +106,65 @@ object VoterModel {
     e
   }
 
-  def main(args: Array[String]): Unit = {
-    // create random initial graph
-    val rnd = new Random(0)
-    val p = 10.0 / numNodes // about 10 friends per node?
-    val nn = nodes.zipWithIndex.toMap
-    for (x <- nodes; y <- nodes if (x != y) && (rnd.nextDouble < p))
+  def randomised(linkProb: Double, rnd: Random): Unit = {
+    for (x <- nodes; y <- nodes if (x != y) && (rnd.nextDouble < linkProb))
       x befriend y
     for (x <- nodes; i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
       x.beliefs(i)(j) = rnd.nextInt(3) - 1
       x.beliefs(j)(i) = x.beliefs(i)(j)
     }
-    // observables
-    var e = energy
-    // run simulation
-    for (sc <- 0 until numSteps) {
-      println(s"$sc $e")
-      // pick a node and a belief at random
-      val x = nodes(rnd.nextInt(numNodes))
-      val i = rnd.nextInt(numConcepts)
-      var j = rnd.nextInt(numConcepts)
-      while (j == i) j = rnd.nextInt(numConcepts)
-      val w = x.beliefs(i)(j)
-      val u = rnd.nextInt(2)
-      val v = if (u == w) -1 else u
-      val diffenergy = updateBelief(x, i, j, v)
-        // if (v == 0) removeBelief(x, i, j)
-        // else if (w == 0) addBelief(x, i, j, v)
-        // else changeBelief(x, i, j)
-      val d = energy
-      require(d == e + diffenergy, s"$d != $e + $diffenergy")
-      val q = scala.math.exp(-diffenergy / temperature)
-      if (diffenergy < 0 || rnd.nextDouble < q) e += diffenergy
-      else updateBelief(x, i, j, w) // backtrack
-      //   if (v == 0) addBelief(x, i, j, w)
-      //   else if (w == 0) removeBelief(x, i, j)
-      //   else changeBelief(x, i, j)
-      // }
-      require(e == energy)
-    }
-    println(s"$numSteps $e")
+  }
+
+  def step(rnd: Random): Double = {
+    // pick a node and a belief at random
+    val x = nodes(rnd.nextInt(numNodes))
+    val i = rnd.nextInt(numConcepts)
+    var j = rnd.nextInt(numConcepts)
+    while (j == i) j = rnd.nextInt(numConcepts)
+    val w = x.beliefs(i)(j)
+    val u = rnd.nextInt(2)
+    val v = if (u == w) -1 else u
+    val diffenergy = updateBelief(x, i, j, v)
+      // if (v == 0) removeBelief(x, i, j)
+      // else if (w == 0) addBelief(x, i, j, v)
+      // else changeBelief(x, i, j)
+    // val d = energy
+    // require(d == e + diffenergy, s"$d != $e + $diffenergy")
+    val q = scala.math.exp(-diffenergy / temperature)
+    if (diffenergy < 0 || rnd.nextDouble < q) diffenergy
+    else { updateBelief(x, i, j, w); 0.0 } // backtrack
+    //   if (v == 0) addBelief(x, i, j, w)
+    //   else if (w == 0) removeBelief(x, i, j)
+    //   else changeBelief(x, i, j)
+    // }
+    // require(e == energy)
   }
 }
 
+object VoterModel {
 
-
-
-
-
-
-
-
+  def main(args: Array[String]): Unit = {
+    val numReps = 1 // 2000
+    val numSteps = 100000
+    // var sum = 0.0
+    // var squaresum = 0.0
+    for (n <- 1 to numReps) yield {
+      val m = new VoterModel()
+      // create random initial graph
+      val rnd = new Random()
+      m.randomised(10.0 / m.numNodes, rnd) // about 10 friends per node?
+      // observables
+      var e = m.energy
+      // run simulation
+      for (sc <- 0 until numSteps) {
+        println(s"$sc $e")
+        e += m.step(rnd)
+      }
+      println(s"$numSteps $e")
+      // sum += e
+      // squaresum += e*e
+      // println(s"$n ${scala.math.sqrt((squaresum/n)-(sum/n))}")
+    }
+  }
+}
 
