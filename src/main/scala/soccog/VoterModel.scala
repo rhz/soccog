@@ -29,51 +29,6 @@ class VoterModel(
   // i and j are concept indices, value can be 1 or -1
   // returns difference in energy
   // TODO: missing normalisation in cognitive energy
-  def addBelief(x: Node, i: Int, j: Int, value: Int): Double = {
-    // assume(i != j)
-    // assume(x.beliefs(i)(j) == 0)
-    // assume(!x.friends.contains(x))
-    x.beliefs(i)(j) = value
-    x.beliefs(j)(i) = value
-    var diffenergy = 0.0
-    for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-    for (y <- x.friends)
-      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * social
-    diffenergy
-  }
-
-  def removeBelief(x: Node, i: Int, j: Int): Double = {
-    // assume(i != j)
-    // assume(x.beliefs(i)(j) == 1 || x.beliefs(i)(j) == -1)
-    // assume(!x.friends.contains(x))
-    var diffenergy = 0.0
-    for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-    for (y <- x.friends)
-      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j) * social
-    x.beliefs(i)(j) = 0
-    x.beliefs(j)(i) = 0
-    diffenergy
-  }
-
-  def changeBelief(x: Node, i: Int, j: Int): Double = {
-    // assume(i != j)
-    // assume(x.beliefs(i)(j) == 1 || x.beliefs(i)(j) == -1)
-    // assume(!x.friends.contains(x))
-    x.beliefs(i)(j) *= -1
-    x.beliefs(j)(i) *= -1
-    var diffenergy = 0.0
-    for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * 2 * cognitive
-    for (y <- x.friends)
-      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * 2 * social
-    diffenergy
-  }
-
-  // i and j are concept indices, value can be 1 or -1
-  // returns difference in energy
-  // TODO: missing normalisation in cognitive energy
   def updateBelief(x: Node, i: Int, j: Int, value: Int): Double = {
     // assume(i != j)
     // assume(!x.friends.contains(x))
@@ -125,46 +80,48 @@ class VoterModel(
     val u = rnd.nextInt(2)
     val v = if (u == w) -1 else u
     val diffenergy = updateBelief(x, i, j, v)
-      // if (v == 0) removeBelief(x, i, j)
-      // else if (w == 0) addBelief(x, i, j, v)
-      // else changeBelief(x, i, j)
-    // val d = energy
-    // require(d == e + diffenergy, s"$d != $e + $diffenergy")
     val q = scala.math.exp(-diffenergy / temperature)
     if (diffenergy < 0 || rnd.nextDouble < q) diffenergy
     else { updateBelief(x, i, j, w); 0.0 } // backtrack
-    //   if (v == 0) addBelief(x, i, j, w)
-    //   else if (w == 0) removeBelief(x, i, j)
-    //   else changeBelief(x, i, j)
-    // }
-    // require(e == energy)
   }
 }
 
 object VoterModel {
 
   def main(args: Array[String]): Unit = {
-    val numReps = 1 // 2000
-    val numSteps = 100000
-    // var sum = 0.0
-    // var squaresum = 0.0
-    for (n <- 1 to numReps) yield {
-      val m = new VoterModel()
-      // create random initial graph
-      val rnd = new Random()
-      m.randomised(10.0 / m.numNodes, rnd) // about 10 friends per node?
-      // observables
-      var e = m.energy
-      // run simulation
-      for (sc <- 0 until numSteps) {
-        println(s"$sc $e")
-        e += m.step(rnd)
-      }
-      println(s"$numSteps $e")
-      // sum += e
-      // squaresum += e*e
-      // println(s"$n ${scala.math.sqrt((squaresum/n)-(sum/n))}")
-    }
+    val numReps = 2000
+    val numSteps = 60000
+    val cognitive = 1.0
+    val social = 1.0
+    val temperature = 1.0
+    // for (social <- List(0.001, 0.01, 0.1, 1, 10)) {
+    //   println(
+    //     (for (temperature <- List(0.001, 0.01, 0.1, 1, 10)) yield {
+          var sum = 0.0
+          var squaresum = 0.0
+          for (n <- 1 to numReps) {
+            val m = new VoterModel(social, cognitive, temperature)
+            // create random initial graph
+            val rnd = new Random()
+            // TODO: does the following linkProb generate
+            // about 10 friends per node?
+            m.randomised(10.0 / m.numNodes, rnd)
+            // observables
+            var e = m.energy
+            // run simulation
+            for (sc <- 0 until numSteps) {
+              // println(s"$sc $e")
+              e += m.step(rnd)
+            }
+            // println(s"$numSteps $e")
+            sum += e
+            squaresum += e*e
+            val mean = sum/n
+            println(s"$n ${scala.math.sqrt((squaresum/n)-(mean*mean))}")
+          }
+    //       sum / numReps
+    //     }).mkString(" "))
+    // }
   }
 }
 
