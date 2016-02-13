@@ -36,13 +36,13 @@ class VoterModel(
     for (k <- 0 until numConcepts if (k != i) && (k != j))
       diffenergy += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
     for (y <- x.friends)
-      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j) * social
     x.beliefs(i)(j) = value
     x.beliefs(j)(i) = value
     for (k <- 0 until numConcepts if (k != i) && (k != j))
       diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
     for (y <- x.friends)
-      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * social
     diffenergy
   }
 
@@ -121,43 +121,48 @@ class VoterModel(
 
 object VoterModel {
 
+  val numReps = 1 // 2000
+  val numSteps = 60000
+  val numEdges = 10
+  val cognitive = 50.0
+  val social = 1.0
+  val temperature = 1.0
+
+  // var sum = 0.0
+  // var squaresum = 0.0
+
+  def run: Unit = {
+    val m = new VoterModel(social, cognitive, temperature)
+    // create random initial graph
+    val rnd = new Random()
+    // about 10 friends per node
+    m.randomised(numEdges.toDouble / m.numNodes, rnd)
+    // observables
+    var e = m.energy
+    // track social and cognitive energy
+    var se = m.socialEnergy
+    var ce = m.cognitiveEnergy
+    println("time energy social cognitive")
+    // run simulation
+    for (sc <- 0 until numSteps) {
+      println(s"$sc $e $se $ce")
+      e += m.step(rnd)
+      se = m.socialEnergy
+      ce = m.cognitiveEnergy
+      require(e == se + ce, s"$e != $se + $ce")
+    }
+    println(s"$numSteps $e $se $ce")
+    // sum += e
+    // squaresum += e*e
+    // val mean = sum/n
+    // println(s"$n ${scala.math.sqrt((squaresum/n)-(mean*mean))}")
+  }
+
   def main(args: Array[String]): Unit = {
-    val numReps = 1 // 2000
-    val numSteps = 60000
-    val cognitive = 1.0
-    val social = 1.0
-    val temperature = 1.0
     // for (social <- List(0.001, 0.01, 0.1, 1, 10)) {
     //   println(
     //     (for (temperature <- List(0.001, 0.01, 0.1, 1, 10)) yield {
-          var sum = 0.0
-          var squaresum = 0.0
-          for (n <- 1 to numReps) {
-            val m = new VoterModel(social, cognitive, temperature)
-            // create random initial graph
-            val rnd = new Random()
-            // TODO: does the following linkProb generate
-            // about 10 friends per node?
-            m.randomised(10.0 / m.numNodes, rnd)
-            // observables
-            var e = m.energy
-            // track social and cognitive energy
-            var se = m.socialEnergy
-            var ce = m.cognitiveEnergy
-            // run simulation
-            for (sc <- 0 until numSteps) {
-              println(s"$sc $e $se $ce")
-              e += m.step(rnd)
-              se = m.socialEnergy
-              ce = m.cognitiveEnergy
-              require(e == se+ce)
-            }
-            println(s"$numSteps $e $se $ce")
-            sum += e
-            squaresum += e*e
-            val mean = sum/n
-            println(s"$n ${scala.math.sqrt((squaresum/n)-(mean*mean))}")
-          }
+          for (n <- 1 to numReps) run
     //       sum / numReps
     //     }).mkString(" "))
     // }
