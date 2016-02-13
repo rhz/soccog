@@ -34,15 +34,15 @@ class VoterModel(
     // assume(!x.friends.contains(x))
     var diffenergy = 0.0
     for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
+      diffenergy += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
     for (y <- x.friends)
-      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j)
+      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
     x.beliefs(i)(j) = value
     x.beliefs(j)(i) = value
     for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
+      diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
     for (y <- x.friends)
-      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j)
+      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
     diffenergy
   }
 
@@ -58,6 +58,39 @@ class VoterModel(
           e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
       }
     }
+    e
+  }
+
+  def individualEnergy(x: Node): Double = {
+    var e = 0.0
+    for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
+      for (k <- (j+1) until numConcepts)
+        e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
+      for (y <- x.friends)
+        // divided by 2, otherwise we are double counting
+        // the contribution of each link
+        e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+    }
+    e
+  }
+
+  def socialEnergy: Double = {
+    var e = 0.0
+    for (x <- nodes)
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
+        for (y <- x.friends)
+          // divided by 2, otherwise we are double counting
+          // the contribution of each link
+          e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+    e
+  }
+
+  def cognitiveEnergy: Double = {
+    var e = 0.0
+    for (x <- nodes)
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
+        for (k <- (j+1) until numConcepts)
+          e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
     e
   }
 
@@ -89,7 +122,7 @@ class VoterModel(
 object VoterModel {
 
   def main(args: Array[String]): Unit = {
-    val numReps = 2000
+    val numReps = 1 // 2000
     val numSteps = 60000
     val cognitive = 1.0
     val social = 1.0
@@ -108,12 +141,18 @@ object VoterModel {
             m.randomised(10.0 / m.numNodes, rnd)
             // observables
             var e = m.energy
+            // track social and cognitive energy
+            var se = m.socialEnergy
+            var ce = m.cognitiveEnergy
             // run simulation
             for (sc <- 0 until numSteps) {
-              // println(s"$sc $e")
+              println(s"$sc $e $se $ce")
               e += m.step(rnd)
+              se = m.socialEnergy
+              ce = m.cognitiveEnergy
+              require(e == se+ce)
             }
-            // println(s"$numSteps $e")
+            println(s"$numSteps $e $se $ce")
             sum += e
             squaresum += e*e
             val mean = sum/n
