@@ -149,6 +149,27 @@ object VoterModel {
   val social = 1.0
   val temperature = 1.0
 
+  def runOnceEnergy: Unit = {
+    val m = new VoterModel(social, cognitive, temperature)
+    // create random initial graph
+    val rnd = new Random()
+    // about 10 friends per node
+    m.randomised(meanDegree / m.numNodes, rnd)
+    // track social and cognitive energy
+    var se = m.socialEnergy
+    var ce = m.cognitiveEnergy
+    println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
+    println("time total soc cog")
+    // run simulation
+    for (sc <- 0 until numSteps) {
+      println(s"$sc ${se+ce} $se $ce")
+      val (sediff, cediff) = m.step(rnd)
+      se += sediff
+      ce += cediff
+    }
+    println(s"$numSteps ${se+ce} $se $ce")
+  }
+
   def runManyEnergy: Unit = {
     println(s"# I=$social T=$temperature <d>=$meanDegree")
     print("J \"mean final social energy\" \"standard deviation social energy\" ")
@@ -157,7 +178,7 @@ object VoterModel {
     // List(2.0, 2.1, 2.2, 2.3, 2.4, 2.41, 2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49,
     // 2.5, 2.51, 2.52, 2.53, 2.54, 2.55, 2.56, 2.57, 2.58, 2.59, 2.6, 2.7, 2.8, 2.9, 3.0)
     // for (c <- (2.0 to 2.31 by .1) ++ (2.4 to 2.601 by .01) ++ (2.7 to 3.1 by 0.1)) {
-    for (c <- 2.11 to 2.191 by .01) {
+    for (c <- 2.61 to 2.691 by .01) {
       cognitive = c
       // sum of the energies and their squares
       // to compute the mean and standard deviation
@@ -195,27 +216,6 @@ object VoterModel {
     }
   }
 
-  def runOnceEnergy: Unit = {
-    val m = new VoterModel(social, cognitive, temperature)
-    // create random initial graph
-    val rnd = new Random()
-    // about 10 friends per node
-    m.randomised(meanDegree / m.numNodes, rnd)
-    // track social and cognitive energy
-    var se = m.socialEnergy
-    var ce = m.cognitiveEnergy
-    println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
-    println("time total soc cog")
-    // run simulation
-    for (sc <- 0 until numSteps) {
-      println(s"$sc ${se+ce} $se $ce")
-      val (sediff, cediff) = m.step(rnd)
-      se += sediff
-      ce += cediff
-    }
-    println(s"$numSteps ${se+ce} $se $ce")
-  }
-
   def runOpt: Unit = {
     val m = new VoterModel(social, cognitive, temperature)
     // create random initial graph
@@ -249,7 +249,7 @@ object VoterModel {
   }
 
   def main(args: Array[String]): Unit = {
-    runOpt
+    runManyEnergy
   }
 }
 
