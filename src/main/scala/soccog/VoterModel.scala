@@ -24,40 +24,41 @@ class VoterModel(
     // so we just need to count the number of stable and unstable
     // cycles in a (-1)->1 transition (and its inverse) to know the
     // delta energy due to cognitive factors.
+    def isOptimal: Boolean = {
+      var e = 0
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
+        for (k <- (j+1) until numConcepts)
+          e -= beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i)
+      e == -120
+    }
   }
 
   // i and j are concept indices, value can be 1 or -1
   // returns difference in energy
-  // TODO: missing normalisation in cognitive energy
-  def updateBelief(x: Node, i: Int, j: Int, value: Int): Double = {
+  // TODO: missing normalisation in cognitive energy?
+  def updateBelief(x: Node, i: Int, j: Int, value: Int)
+      : (Double, Double) = {
     // assume(i != j)
     // assume(!x.friends.contains(x))
-    var diffenergy = 0.0
+    var sediff = 0.0 // social energy difference
+    var cediff = 0.0 // cognitive energy difference
     for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
+      cediff += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
     for (y <- x.friends)
-      diffenergy += x.beliefs(i)(j) * y.beliefs(i)(j) * social
+      sediff += x.beliefs(i)(j) * y.beliefs(i)(j)
     x.beliefs(i)(j) = value
     x.beliefs(j)(i) = value
     for (k <- 0 until numConcepts if (k != i) && (k != j))
-      diffenergy -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
+      cediff -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
     for (y <- x.friends)
-      diffenergy -= x.beliefs(i)(j) * y.beliefs(i)(j) * social
-    diffenergy
+      sediff -= x.beliefs(i)(j) * y.beliefs(i)(j)
+    (sediff * social, cediff * cognitive)
   }
 
   def energy: Double = {
     var e = 0.0
-    for (x <- nodes) {
-      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
-        for (k <- (j+1) until numConcepts)
-          e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-        for (y <- x.friends)
-          // divided by 2, otherwise we are double counting
-          // the contribution of each link
-          e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
-      }
-    }
+    for (x <- nodes)
+      e += individualEnergy(x)
     e
   }
 
@@ -103,7 +104,7 @@ class VoterModel(
     }
   }
 
-  def step(rnd: Random): Double = {
+  def step(rnd: Random): (Double, Double) = {
     // pick a node and a belief at random
     val x = nodes(rnd.nextInt(numNodes))
     val i = rnd.nextInt(numConcepts)
@@ -112,60 +113,143 @@ class VoterModel(
     val w = x.beliefs(i)(j)
     val u = rnd.nextInt(2)
     val v = if (u == w) -1 else u
-    val diffenergy = updateBelief(x, i, j, v)
-    val q = scala.math.exp(-diffenergy / temperature)
-    if (diffenergy < 0 || rnd.nextDouble < q) diffenergy
-    else { updateBelief(x, i, j, w); 0.0 } // backtrack
+    val (sediff, cediff) = updateBelief(x, i, j, v)
+    val energydiff = sediff + cediff
+    val q = scala.math.exp(-energydiff / temperature)
+    if (energydiff <= 0 || rnd.nextDouble <= q) (sediff, cediff)
+    else { updateBelief(x, i, j, w); (0.0, 0.0) } // backtrack
+  }
+
+  def stepDiff(rnd: Random): (Node, Int, Int, Int, Int) = {
+    // pick a node and a belief at random
+    val x = nodes(rnd.nextInt(numNodes))
+    val i = rnd.nextInt(numConcepts)
+    var j = rnd.nextInt(numConcepts)
+    while (j == i) j = rnd.nextInt(numConcepts)
+    val w = x.beliefs(i)(j)
+    val u = rnd.nextInt(2)
+    val v = if (u == w) -1 else u
+    val (sediff, cediff) = updateBelief(x, i, j, v)
+    val energydiff = sediff + cediff
+    val q = scala.math.exp(-energydiff / temperature)
+    if (energydiff > 0 && rnd.nextDouble > q)
+      updateBelief(x, i, j, w) // backtrack
+    (x, i, j, w, v)
   }
 }
 
 object VoterModel {
 
-  val numReps = 1 // 2000
-  val numSteps = 60000
-  val numEdges = 10
-  val cognitive = 50.0
+  // model parameters
+  val numReps = 1000
+  val numSteps = 100000
+  val meanDegree = 10.0
+  var cognitive = 2.5 // 3.75 for equal social and cognitive
+                      // minimum energy (see google doc)
   val social = 1.0
   val temperature = 1.0
 
-  // var sum = 0.0
-  // var squaresum = 0.0
+  def runManyEnergy: Unit = {
+    println(s"# I=$social T=$temperature <d>=$meanDegree")
+    print("J \"mean final social energy\" \"standard deviation social energy\" ")
+    print("\"mean final cognitive energy\" \"standard deviation cognitive energy\" ")
+    println("\"mean final total energy\" \"standard deviation total energy\"")
+    // List(2.0, 2.1, 2.2, 2.3, 2.4, 2.41, 2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49,
+    // 2.5, 2.51, 2.52, 2.53, 2.54, 2.55, 2.56, 2.57, 2.58, 2.59, 2.6, 2.7, 2.8, 2.9, 3.0)
+    // for (c <- (2.0 to 2.31 by .1) ++ (2.4 to 2.601 by .01) ++ (2.7 to 3.1 by 0.1)) {
+    for (c <- 2.11 to 2.191 by .01) {
+      cognitive = c
+      // sum of the energies and their squares
+      // to compute the mean and standard deviation
+      var sum = 0.0
+      var sqsum = 0.0
+      var ssum = 0.0
+      var sqssum = 0.0
+      var csum = 0.0
+      var sqcsum = 0.0
+      for (n <- 1 to numReps) {
+        val m = new VoterModel(social, cognitive, temperature)
+        // create random initial graph
+        val rnd = new Random()
+        // about 10 friends per node
+        m.randomised(meanDegree / m.numNodes, rnd)
+        // run simulation
+        for (sc <- 0 until numSteps) m.step(rnd)
+        // accumulate the energies
+        val se = m.socialEnergy
+        ssum += se
+        sqssum += se*se
+        val ce = m.cognitiveEnergy
+        csum += ce
+        sqcsum += ce*ce
+        val e = se+ce
+        sum += e
+        sqsum += e*e
+      }
+      val n = numReps
+      def sd(sum: Double, sqsum: Double): Double =
+        scala.math.sqrt((sqsum/n)-((sum/n)*(sum/n)))
+      // TODO: print theoretical maximum as well or reach/max
+      print(s"$cognitive ${ssum/n} ${sd(ssum, sqssum)} ${csum/n}")
+      println(s" ${sd(csum, sqcsum)} ${sum/n} ${sd(sum, sqsum)}")
+    }
+  }
 
-  def run: Unit = {
+  def runOnceEnergy: Unit = {
     val m = new VoterModel(social, cognitive, temperature)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
-    m.randomised(numEdges.toDouble / m.numNodes, rnd)
-    // observables
-    var e = m.energy
+    m.randomised(meanDegree / m.numNodes, rnd)
     // track social and cognitive energy
     var se = m.socialEnergy
     var ce = m.cognitiveEnergy
-    println("time energy social cognitive")
+    println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
+    println("time total soc cog")
     // run simulation
     for (sc <- 0 until numSteps) {
-      println(s"$sc $e $se $ce")
-      e += m.step(rnd)
-      se = m.socialEnergy
-      ce = m.cognitiveEnergy
-      require(e == se + ce, s"$e != $se + $ce")
+      println(s"$sc ${se+ce} $se $ce")
+      val (sediff, cediff) = m.step(rnd)
+      se += sediff
+      ce += cediff
     }
-    println(s"$numSteps $e $se $ce")
-    // sum += e
-    // squaresum += e*e
-    // val mean = sum/n
-    // println(s"$n ${scala.math.sqrt((squaresum/n)-(mean*mean))}")
+    println(s"$numSteps ${se+ce} $se $ce")
+  }
+
+  def runOpt: Unit = {
+    val m = new VoterModel(social, cognitive, temperature)
+    // create random initial graph
+    val rnd = new Random()
+    // about 10 friends per node
+    m.randomised(meanDegree / m.numNodes, rnd)
+    for (sc <- 0 until numSteps) {
+      m.step(rnd)
+      for (x <- m.nodes if x.isOptimal) yield x
+    }
+  }
+
+  def runMatrix: Unit = {
+    for (social <- List(0.001, 0.01, 0.1, 1, 10)) {
+      println(
+        (for (temperature <- List(0.001, 0.01, 0.1, 1, 10)) yield {
+          var sum = 0.0
+          for (n <- 1 to numReps) {
+            val m = new VoterModel(social, cognitive, temperature)
+            // create random initial graph
+            val rnd = new Random()
+            // about 10 friends per node
+            m.randomised(meanDegree / m.numNodes, rnd)
+            // run simulation
+            for (sc <- 0 until numSteps) m.step(rnd)
+            sum += m.energy
+          }
+          sum / numReps
+        }).mkString(" "))
+    }
   }
 
   def main(args: Array[String]): Unit = {
-    // for (social <- List(0.001, 0.01, 0.1, 1, 10)) {
-    //   println(
-    //     (for (temperature <- List(0.001, 0.01, 0.1, 1, 10)) yield {
-          for (n <- 1 to numReps) run
-    //       sum / numReps
-    //     }).mkString(" "))
-    // }
+    runOpt
   }
 }
 
