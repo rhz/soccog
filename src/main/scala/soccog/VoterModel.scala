@@ -189,7 +189,7 @@ object VoterModel {
     println("\"mean final total energy\" \"standard deviation total energy\"")
     // List(2.0, 2.1, 2.2, 2.3, 2.4, 2.41, 2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49,
     // 2.5, 2.51, 2.52, 2.53, 2.54, 2.55, 2.56, 2.57, 2.58, 2.59, 2.6, 2.7, 2.8, 2.9, 3.0)
-    // for (c <- (2.0 to 2.31 by .1) ++ (2.4 to 2.601 by .01) ++ (2.7 to 3.1 by 0.1)) {
+    // for (c <- (2.0 to 2.31 by .1) ++ (2.4 to 2.601 by .01) ++ (2.7 to 3.01 by 0.1)) {
     for (c <- 2.61 to 2.691 by .01) {
       cognitive = c
       // sum of the energies and their squares
@@ -228,40 +228,175 @@ object VoterModel {
     }
   }
 
-  def runOpt: Unit = {
+  def runOnceOpt: Unit = {
     val m = new VoterModel(social, cognitive, temperature)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
     m.randomised(meanDegree / m.numNodes, rnd)
-    for (sc <- 0 until numSteps) {
-      m.step(rnd)
-      for (x <- m.nodes if x.isOptimal) yield x
+    // observables
+    // val opts = mutable.Map.empty[m.Node, Boolean]
+    // for (x <- m.nodes)
+    //   opts(x) = x.isOptimal
+    // def count: Int = opts.count({ case (_, o) => o })
+    // def cogstates = for ((x, o) <- opts if o) yield x.beliefs.flatten
+    // def countDistinct = cogstates.toSet.size
+    val belief = mutable.Map.empty[m.Node, Seq[Int]]
+    val cogstates = mutable.Map.empty[Seq[Int], Int]
+    val optimals = mutable.Set.empty[Seq[Int]]
+    for (x <- m.nodes) {
+      val v = // x.beliefs.flatten.toSeq
+        (for (i <- 0 until (m.numConcepts-1);
+              j <- (i+1) until m.numConcepts)
+         yield x.beliefs(i)(j)).toSeq
+      belief(x) = v
+      if (cogstates contains v) cogstates(v) += 1
+      else cogstates(v) = 1
+      if (x.isOptimal) optimals += v
     }
+    def opts: Int = optimals.toSeq.map(cogstates(_)).sum
+    def distincts: Int = optimals.count(cogstates(_) > 0)
+    def shared(u: Seq[Int], v: Seq[Int]): Double = {
+      val n = m.numConcepts * (m.numConcepts-1) / 2
+      require(u.size == n, s"${u.size} != $n")
+      require(v.size == n, s"${v.size} != $n")
+      var sames = 0
+      for (i <- 0 until n if u(i) == v(i)) sames += 1
+      // require(sames <= n, s"$sames > n")
+      sames.toDouble / n
+    }
+    def totalhg: Double = {
+      val u = cogstates.toSeq.maxBy({ case (v, n) => n })._1
+      (for ((v, n) <- cogstates) yield n * shared(u, v)).sum
+    }
+    def opthg: Double = {
+      var max = 0
+      var u: Seq[Int] = null
+      for ((v, n) <- cogstates if optimals(v)) {
+        if (n > max) {
+          max = n
+          u = v
+        }
+      }
+      if (u == null) 0.0
+      else (for ((v, n) <- cogstates if optimals(v))
+            yield n * shared(u, v)).sum
+    }
+    // track social and cognitive energy
+    var se = m.socialEnergy
+    var ce = m.cognitiveEnergy
+    // run simulation
+    println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
+    print("time optimal \"distinct optimal\" \"total homogeneity\" ")
+    println("\"optimal homogeneity\" total soc cog")
+    for (sc <- 0 until numSteps) {
+      println(s"$sc $opts $distincts $totalhg $opthg ${se+ce} $se $ce")
+      val (x, i, j, a, b, sediff, cediff) = m.stepDiffAndEnergy(rnd)
+      if (x.beliefs(i)(j) == b) { // belief changed
+        cogstates(belief(x)) -= 1
+        val v = // x.beliefs.flatten
+          (for (i <- 0 until (m.numConcepts-1);
+                j <- (i+1) until m.numConcepts)
+           yield x.beliefs(i)(j)).toSeq
+        belief(x) = v
+        if (cogstates contains v) cogstates(v) += 1
+        else cogstates(v) = 1
+        // TODO: x.isOptimal is run even if
+        // we know already that it's not optimal
+        if (!optimals(v) && x.isOptimal) optimals += v
+        se += sediff
+        ce += cediff
+      }
+    }
+    println(s"$numSteps $opts $distincts $totalhg $opthg ${se+ce} $se $ce")
   }
 
-  def runMatrix: Unit = {
-    for (social <- List(0.001, 0.01, 0.1, 1, 10)) {
-      println(
-        (for (temperature <- List(0.001, 0.01, 0.1, 1, 10)) yield {
-          var sum = 0.0
-          for (n <- 1 to numReps) {
-            val m = new VoterModel(social, cognitive, temperature)
-            // create random initial graph
-            val rnd = new Random()
-            // about 10 friends per node
-            m.randomised(meanDegree / m.numNodes, rnd)
-            // run simulation
-            for (sc <- 0 until numSteps) m.step(rnd)
-            sum += m.energy
-          }
-          sum / numReps
-        }).mkString(" "))
+  // TODO: it would be nice to make a video of the changing histogram
+  // (or ranking?) of the number of individuals in each distinct
+  // cognitive state.
+  // together with a matrix that tells you have many shared beliefs
+  // each pair of distinct cognitive states have.
+  // possible observable: take the most populated cognitive state
+  // and count 1 for each individual in it + the fraction of shared
+  // beliefs times the number of the individuals in each different
+  // cognitive state. so: \sum_{c \in C} s(c) * n(c)
+  // with s(c) the number of shared beliefs between c and the most
+  // populated cognitive state c\st (this is 1 when c = c\st) and
+  // n(c) the number of individuals in that state.
+  // it should be equivalent to \sum_{v \in V} s(v)
+  // with s(v) the number of shared beliefs between node v and c\st.
+
+  def runManyOpt: Unit = {
+    println(s"# I=$social T=$temperature <d>=$meanDegree")
+    print("J \"mean final optimal count\" ")
+    print("\"standard deviation optimal count\" ")
+    print("\"mean final distinct optimal count\" ")
+    println("\"standard deviation distinct optimal count\"")
+    // for (c <- 2.0 +: ((2.1 to 2.701 by .01) ++ (2.8 to 3.01 by 0.1))) {
+    for (c <- 5.21 to 6.001 by .01) {
+      cognitive = c
+      // sum of the energies and their squares
+      // to compute the mean and standard deviation
+      var osum = 0.0
+      var sqosum = 0.0
+      var dsum = 0.0
+      var sqdsum = 0.0
+      // homogeneity observable
+      var ssum = 0.0
+      var sqssum = 0.0
+      for (n <- 1 to numReps) {
+        val m = new VoterModel(social, cognitive, temperature)
+        // create random initial graph
+        val rnd = new Random()
+        // about 10 friends per node
+        m.randomised(meanDegree / m.numNodes, rnd)
+        // run simulation
+        for (sc <- 0 until numSteps) {
+          val (x, i, j, w, v) = m.stepDiff(rnd)
+        }
+        // observe final state
+        var opts: Int = 0
+        val cogstates = mutable.Map.empty[Seq[Int], Int]
+        for (x <- m.nodes if x.isOptimal) {
+          opts += 1
+          val v = x.beliefs.flatten.toSeq
+          if (cogstates contains v) cogstates(v) += 1
+          else cogstates(v) = 1
+          // for (i <- 0 until (m.numConcepts-1);
+          //      j <- (i+1) until m.numConcepts)
+          // yield x.beliefs(i)(j)
+        }
+        osum += opts
+        sqosum += opts*opts
+        val distincts = cogstates.size
+        dsum += distincts
+        sqdsum += distincts*distincts
+        // val u = cogstates.toSeq.maxBy({ case (v, n) => n })._1
+        // def shared(u: Seq[Int], v: Seq[Int]): Double = {
+        //   val n = m.numConcepts * (m.numConcepts-1) / 2
+        //   require(u.size == n)
+        //   require(v.size == n)
+        //   var sames = 0
+        //   for (i <- 0 until n if u(i) == v(i)) sames += 1
+        //   sames / n
+        // }
+        // val s = (for ((v, n) <- cogstates) yield n*shared(u, v)).sum
+        // ssum += s
+        // sqssum += s*s
+      }
+      val n = numReps
+      def sd(sum: Double, sqsum: Double): Double =
+        scala.math.sqrt((sqsum/n)-((sum/n)*(sum/n)))
+      print(s"$cognitive ${osum/n} ${sd(osum, sqosum)}")
+      println(s" ${dsum/n} ${sd(dsum, sqdsum)}")
+      // print(s"$cognitive ${osum/n} ${sd(osum, sqosum)} ${dsum/n} ")
+      // println(s"${sd(dsum, sqdsum)} ${ssum/n} ${sd(ssum, sqssum)}")
     }
   }
 
   def main(args: Array[String]): Unit = {
-    runManyEnergy
+    // runManyOpt
+    runOnceOpt
   }
 }
 
