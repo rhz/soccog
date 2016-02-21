@@ -18,19 +18,11 @@ class VoterModel(
     val beliefs: Array[Array[Int]] =
       Array.fill(numConcepts, numConcepts)(0)
     def befriend(x: Node) = { friends += x; x.friends += this; this }
-    // only 0->(+-1) can create a cycle and the reverse destroy one
-    // (-1)->1 keeps the number of cycles and makes
-    // all the stable ones unstable and vice versa
-    // so we just need to count the number of stable and unstable
-    // cycles in a (-1)->1 transition (and its inverse) to know the
-    // delta energy due to cognitive factors.
-    def isOptimal: Boolean = {
-      var e = 0
-      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
-        for (k <- (j+1) until numConcepts)
-          e -= beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i)
-      e == -120
-    }
+    def isOptimal: Boolean =
+      (0 until (numConcepts-2)).forall(i =>
+        ((i+1) until (numConcepts-1)).forall(j =>
+          ((j+1) until numConcepts).forall(k =>
+            (beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i)) == 1)))
   }
 
   // i and j are concept indices, value can be 1 or -1
