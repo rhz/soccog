@@ -128,6 +128,26 @@ class VoterModel(
       updateBelief(x, i, j, w) // backtrack
     (x, i, j, w, v)
   }
+
+  def stepDiffAndEnergy(rnd: Random): (Node, Int, Int, Int, Int, Double, Double) = {
+    // pick a node and a belief at random
+    val x = nodes(rnd.nextInt(numNodes))
+    val i = rnd.nextInt(numConcepts)
+    var j = rnd.nextInt(numConcepts)
+    while (j == i) j = rnd.nextInt(numConcepts)
+    val w = x.beliefs(i)(j)
+    val u = rnd.nextInt(2)
+    val v = if (u == w) -1 else u
+    val (sediff, cediff) = updateBelief(x, i, j, v)
+    val energydiff = sediff + cediff
+    val q = scala.math.exp(-energydiff / temperature)
+    if (energydiff <= 0 || rnd.nextDouble <= q)
+      (x, i, j, w, v, sediff, cediff)
+    else {
+      updateBelief(x, i, j, w) // backtrack
+      (x, i, j, w, v, 0.0, 0.0)
+    }
+  }
 }
 
 object VoterModel {
