@@ -23,6 +23,31 @@ class VoterModel(
         ((i+1) until (numConcepts-1)).forall(j =>
           ((j+1) until numConcepts).forall(k =>
             (beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i)) == 1)))
+    def cognitiveEnergy: Double = {
+      var e = 0.0
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
+        for (k <- (j+1) until numConcepts)
+          e -= beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i) * cognitive
+      }
+      e
+    }
+    def socialEnergy: Double = {
+      var e = 0.0
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
+        for (y <- friends)
+          e -= beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+      e
+    }
+    def energy: Double = {
+      var e = 0.0
+      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
+        for (k <- (j+1) until numConcepts)
+          e -= beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i) * cognitive
+        for (y <- friends)
+          e -= beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+      }
+      e
+    }
   }
 
   // i and j are concept indices, value can be 1 or -1
@@ -47,45 +72,14 @@ class VoterModel(
     (sediff * social, cediff * cognitive)
   }
 
-  def energy: Double = {
-    var e = 0.0
-    for (x <- nodes)
-      e += individualEnergy(x)
-    e
-  }
+  def cognitiveEnergy: Double =
+    (for (x <- nodes) yield x.cognitiveEnergy).sum
 
-  def individualEnergy(x: Node): Double = {
-    var e = 0.0
-    for (i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
-      for (k <- (j+1) until numConcepts)
-        e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-      for (y <- x.friends)
-        // divided by 2, otherwise we are double counting
-        // the contribution of each link
-        e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
-    }
-    e
-  }
+  def socialEnergy: Double =
+    (for (x <- nodes) yield x.socialEnergy).sum
 
-  def socialEnergy: Double = {
-    var e = 0.0
-    for (x <- nodes)
-      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
-        for (y <- x.friends)
-          // divided by 2, otherwise we are double counting
-          // the contribution of each link
-          e -= x.beliefs(i)(j) * y.beliefs(i)(j) * social / 2
-    e
-  }
-
-  def cognitiveEnergy: Double = {
-    var e = 0.0
-    for (x <- nodes)
-      for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
-        for (k <- (j+1) until numConcepts)
-          e -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i) * cognitive
-    e
-  }
+  def energy: Double =
+    (for (x <- nodes) yield x.energy).sum
 
   def randomised(linkProb: Double, rnd: Random): Unit = {
     for (x <- nodes; y <- nodes if (x != y) && (rnd.nextDouble < linkProb))
