@@ -90,8 +90,8 @@ class VoterModel(
     }
   }
 
-  def step(rnd: Random): (Double, Double) = {
-    // pick a node and a belief at random
+  // pick a node and a belief at random
+  def randomBeliefChange(rnd: Random): (Node, Int, Int, Int, Int) = {
     val x = nodes(rnd.nextInt(numNodes))
     val i = rnd.nextInt(numConcepts)
     var j = rnd.nextInt(numConcepts)
@@ -99,6 +99,11 @@ class VoterModel(
     val w = x.beliefs(i)(j)
     val u = rnd.nextInt(2)
     val v = if (u == w) -1 else u
+    (x, i, j, w, v)
+  }
+
+  def step(rnd: Random): (Double, Double) = {
+    val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
     val q = scala.math.exp(-energydiff / temperature)
@@ -107,14 +112,7 @@ class VoterModel(
   }
 
   def stepDiff(rnd: Random): (Node, Int, Int, Int, Int) = {
-    // pick a node and a belief at random
-    val x = nodes(rnd.nextInt(numNodes))
-    val i = rnd.nextInt(numConcepts)
-    var j = rnd.nextInt(numConcepts)
-    while (j == i) j = rnd.nextInt(numConcepts)
-    val w = x.beliefs(i)(j)
-    val u = rnd.nextInt(2)
-    val v = if (u == w) -1 else u
+    val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
     val q = scala.math.exp(-energydiff / temperature)
@@ -124,14 +122,7 @@ class VoterModel(
   }
 
   def stepDiffAndEnergy(rnd: Random): (Node, Int, Int, Int, Int, Double, Double) = {
-    // pick a node and a belief at random
-    val x = nodes(rnd.nextInt(numNodes))
-    val i = rnd.nextInt(numConcepts)
-    var j = rnd.nextInt(numConcepts)
-    while (j == i) j = rnd.nextInt(numConcepts)
-    val w = x.beliefs(i)(j)
-    val u = rnd.nextInt(2)
-    val v = if (u == w) -1 else u
+    val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
     val q = scala.math.exp(-energydiff / temperature)
