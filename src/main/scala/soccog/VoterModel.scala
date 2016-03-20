@@ -167,15 +167,26 @@ object VoterModel {
     println(s"$numSteps ${se+ce} $se $ce")
   }
 
-  def runManyEnergy: Unit = {
-    println(s"# I=$social T=$temperature <d>=$meanDegree")
-    print("J \"mean final social energy\" \"standard deviation social energy\" ")
-    print("\"mean final cognitive energy\" \"standard deviation cognitive energy\" ")
-    println("\"mean final total energy\" \"standard deviation total energy\"")
-    // List(2.0, 2.1, 2.2, 2.3, 2.4, 2.41, 2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49,
-    // 2.5, 2.51, 2.52, 2.53, 2.54, 2.55, 2.56, 2.57, 2.58, 2.59, 2.6, 2.7, 2.8, 2.9, 3.0)
-    // for (c <- (2.0 to 2.31 by .1) ++ (2.4 to 2.601 by .01) ++ (2.7 to 3.01 by 0.1)) {
-    for (c <- 2.61 to 2.691 by .01) {
+  def using[A <: java.io.Closeable, B](a: A)(f: A => B): B =
+    try { f(a) } finally { a.close() }
+
+  def writeToFile(fileName: String, append: Boolean = false)(
+    op: java.io.PrintWriter => Unit): Unit =
+    using (new java.io.FileWriter(fileName, append)) { fileWriter =>
+      using (new java.io.PrintWriter(fileWriter)) { printWriter =>
+        op(printWriter)
+      }
+    }
+
+  def runManyEnergy(start: Double, end: Double, step: Double,
+    fileName: String): Unit = {
+    writeToFile (fileName) { out =>
+      out.println(s"# I=$social T=$temperature <d>=$meanDegree numSteps=$numSteps numReps=$numReps")
+      out.print("J \"mean final social energy\" \"standard deviation social energy\" ")
+      out.print("\"mean final cognitive energy\" \"standard deviation cognitive energy\" ")
+      out.println("\"mean final total energy\" \"standard deviation total energy\"")
+    }
+    for (c <- start to end by step) { // 0.5 to 0.991 by .01) {
       cognitive = c
       // sum of the energies and their squares
       // to compute the mean and standard deviation
@@ -208,8 +219,10 @@ object VoterModel {
       def sd(sum: Double, sqsum: Double): Double =
         scala.math.sqrt((sqsum/n)-((sum/n)*(sum/n)))
       // TODO: print theoretical maximum as well or reach/max
-      print(s"$cognitive ${ssum/n} ${sd(ssum, sqssum)} ${csum/n}")
-      println(s" ${sd(csum, sqcsum)} ${sum/n} ${sd(sum, sqsum)}")
+      writeToFile (fileName, true) { out =>
+        out.print(s"$cognitive ${ssum/n} ${sd(ssum, sqssum)} ${csum/n}")
+        out.println(s" ${sd(csum, sqcsum)} ${sum/n} ${sd(sum, sqsum)}")
+      }
     }
   }
 
