@@ -139,7 +139,7 @@ object VoterModel {
 
   // model parameters
   val numReps = 1000
-  val numSteps = 100000
+  val numSteps = 200000
   val meanDegree = 10.0
   var cognitive = 2.5 // 3.75 for equal social and cognitive
                       // minimum energy (see google doc)
@@ -404,6 +404,7 @@ object VoterModel {
         se += sediff
         ce += cediff
         changed += 1
+        writeDot(m, s"$sc.dot")
       }
     }
   }
@@ -491,9 +492,74 @@ object VoterModel {
     }
   }
 
+  // https://en.wikibooks.org/wiki/Color_Theory/Color_gradient
+  // https://stackoverflow.com/questions/26106695/converting-int-value-to-a-color-in-a-gradient
+  def rainbow(pos: Double): String = {
+    val nmax = 5 // number of colour segments
+    val m = pos*nmax
+    val n = m.toInt
+    val f = m-n
+    val t = (f*255).toInt
+    n match {
+      case 0 => rgbToHex(255, t, 0)
+      case 1 => rgbToHex(255-t, 255, 0)
+      case 2 => rgbToHex(0, 255, t)
+      case 3 => rgbToHex(0, 255-t, 255)
+      case 4 => rgbToHex(t, 0, 255)
+      case _ => throw new IllegalArgumentException(
+        "pos parameter $pos > 1")
+    }
+  }
+
+  def rgbToHex(red: Int, green: Int, blue: Int): String =
+    toHex(red) + toHex(green) + toHex(blue)
+
+  def toHex(x: Int): String = {
+    val h = Integer.toString(x, 16)
+    if (h.size == 1) "0" + h else h
+  }
+
+  def writeDot(m: VoterModel, fileName: String): Unit = {
+    writeToFile (fileName) { out =>
+      out.println("graph {")
+      // https://stackoverflow.com/questions/3967600/how-to-prevent-edges-in-graphviz-to-overlap-each-other
+      out.println("  overlap=scale;")
+      out.println("  splines=true;")
+      // print nodes
+      val nn = m.nodes.zipWithIndex.toMap
+      for (x <- m.nodes) {
+        val cog = x.cognitiveEnergy/m.cognitive
+        val f = 1.0-((cog+120)/240)
+        val alpha = (f*f*255).toInt
+        require(alpha < 256, s"$alpha > 256")
+        var numNegativeBeliefs = 0
+        for (i <- 0 until m.numConcepts; j <- (i+1) until m.numConcepts
+          if x.beliefs(i)(j) == -1) numNegativeBeliefs += 1
+        val rgba = rainbow(numNegativeBeliefs / 45.0) + toHex(alpha)
+        out.print(s"""  ${nn(x)} [label="", shape="circle", """)
+        out.println(s"""style="filled", color="#$rgba"];""")
+      }
+      // print edges
+      val visited = mutable.Set.empty[m.Node]
+      for (x <- m.nodes; y <- x.friends if !visited(y)) {
+        out.println(s"  ${nn(x)} -- ${nn(y)};")
+        visited += x
+      }
+      out.println(s"}")
+    }
+  }
+
   def main(args: Array[String]): Unit = {
     // runManyOpt
-    runOnceOpt
+    if (args.size == 1)
+      runOnceOpt(args(0))
+    else
+      println("Usage: VoterModel <filename>")
+    // if (args.size == 4)
+    //   runManyEnergy(args(0).toDouble, args(1).toDouble,
+    //     args(2).toDouble, args(3))
+    // else
+    //   println("Usage: VoterModel <start> <end> <step> <filename>")
   }
 }
 
