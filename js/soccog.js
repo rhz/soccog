@@ -37,11 +37,13 @@ var width = 800,
     active = false;
 
 function initParams() {
-  params = { N: parseInt($("input[name=N]").val()), // number of individuals
-             M: parseInt($("input[name=M]").val()), // number of concepts
-             I: parseFloat($("input[name=I]").val()), // social factor
-             J: parseFloat($("input[name=J]").val()), // cognitive factor
-             K: parseFloat($("input[name=K]").val()) }; // mean degree
+  params = {
+    N: parseInt($("input[name=N]").val()), // number of individuals
+    M: parseInt($("input[name=M]").val()), // number of concepts
+    I: parseFloat($("input[name=I]").val()), // social factor
+    J: parseFloat($("input[name=J]").val()), // cognitive factor
+    K: parseFloat($("input[name=K]").val())  // mean degree
+  };
   numBeliefs = params.M * (params.M - 1) / 2;
   numTriangles = choose(params.M, 3);
 }
@@ -257,7 +259,8 @@ function waitGUI(diff) {
   // } else {
   //   updateGUI(diff);
   // }
-  setTimeout(function() { updateGUI(diff); }, 10);
+  var delay = parseFloat($("input[name=delay]").val());
+  setTimeout(function() { updateGUI(diff); }, delay);
 }
 
 function updateGUI(diff) {
