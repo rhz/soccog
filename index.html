@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css"> -->
+  <style>
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.link {
+  stroke: #999;
+  stroke-opacity: .6;
+}
+  </style>
+  <script type="text/javascript" src="https://code.jquery.com/jquery-2.2.2.min.js"></script>
+  <!-- <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script> -->
+  <script src="https://d3js.org/d3.v3.min.js"></script>
+  <script src="js/soccog.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="row" style="margin-top: 20px">
+      <div class="col-md-7" style="text-align: center">
+        <span title="number of individuals">
+          <label for="N">N = </label>
+          <input type="text" name="N" value="100" size="5"></input>
+        </span>
+        <span title="number of concepts" style="margin-left: 30px">
+          <label for="M">M = </label>
+          <input type="text" name="M" value="10" size="5"></input>
+        </span>
+        <span title="mean degree" style="margin-left: 30px">
+          <label for="K">K = </label>
+          <input type="text" name="K" value="6.0" size="5"></input>
+        </span>
+        <span title="social strength" style="margin-left: 30px">
+          <label for="I">I = </label>
+          <input type="text" name="I" value="1.0" size="5"></input>
+        </span>
+        <span title="cognitive strength" style="margin-left: 30px">
+          <label for="J">J = </label>
+          <input type="text" name="J" value="1.25" size="5"></input>
+        </span>
+      </div>
+      <div class="col-md-1 col-md-offset-1">
+        <button class="btn btn-default" name="start"
+                onclick="start();">Start</button>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-default" name="restart"
+                onclick="stop();">Stop</button>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-default" name="restart"
+                onclick="restart();">Restart</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 20px">
+      <div id="svg-div" class="col-md-7"></div>
+      <div class="col-md-5">
+        <div class="row">
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
