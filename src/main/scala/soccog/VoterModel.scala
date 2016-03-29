@@ -145,9 +145,11 @@ object VoterModel {
                       // minimum energy (see google doc)
   val social = 1.0
   val temperature = 1.0
+  val numNodes = 100
+  val numConcepts = 10
 
   def runOnceEnergy: Unit = {
-    val m = new VoterModel(social, cognitive, temperature)
+    val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
@@ -197,7 +199,7 @@ object VoterModel {
       var csum = 0.0
       var sqcsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, temperature)
+        val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
         // create random initial graph
         val rnd = new Random()
         // about 10 friends per node
@@ -404,7 +406,7 @@ object VoterModel {
         se += sediff
         ce += cediff
         changed += 1
-        writeDot(m, s"$sc.dot")
+        writeDot(m, s"${sc+1}.dot")
       }
     }
   }
@@ -424,14 +426,16 @@ object VoterModel {
   // it should be equivalent to \sum_{v \in V} s(v)
   // with s(v) the number of shared beliefs between node v and c\st.
 
-  def runManyOpt: Unit = {
-    println(s"# I=$social T=$temperature <d>=$meanDegree")
-    print("J \"mean final optimal count\" ")
-    print("\"standard deviation optimal count\" ")
-    print("\"mean final distinct optimal count\" ")
-    println("\"standard deviation distinct optimal count\"")
-    // for (c <- 2.0 +: ((2.1 to 2.701 by .01) ++ (2.8 to 3.01 by 0.1))) {
-    for (c <- 5.21 to 6.001 by .01) {
+  def runManyOpt(start: Double, end: Double, step: Double,
+    fileName: String): Unit = {
+    writeToFile (fileName) { out =>
+      out.println(s"# N=$numNodes M=$numConcepts I=$social T=$temperature K=$meanDegree")
+      out.print("J \"mean final optimal count\" ")
+      out.print("\"standard deviation optimal count\" ")
+      out.print("\"mean final distinct optimal count\" ")
+      out.println("\"standard deviation distinct optimal count\"")
+    }
+    for (c <- start to end by step) {
       cognitive = c
       // sum of the energies and their squares
       // to compute the mean and standard deviation
@@ -440,10 +444,10 @@ object VoterModel {
       var dsum = 0.0
       var sqdsum = 0.0
       // homogeneity observable
-      var ssum = 0.0
-      var sqssum = 0.0
+      var hsum = 0.0
+      var sqhsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, temperature)
+        val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
         // create random initial graph
         val rnd = new Random()
         // about 10 friends per node
@@ -453,42 +457,25 @@ object VoterModel {
           val (x, i, j, w, v) = m.stepDiff(rnd)
         }
         // observe final state
-        var opts: Int = 0
-        val cogstates = mutable.Map.empty[Seq[Int], Int]
-        for (x <- m.nodes if x.isOptimal) {
-          opts += 1
-          val v = x.beliefs.flatten.toSeq
-          if (cogstates contains v) cogstates(v) += 1
-          else cogstates(v) = 1
-          // for (i <- 0 until (m.numConcepts-1);
-          //      j <- (i+1) until m.numConcepts)
-          // yield x.beliefs(i)(j)
-        }
-        osum += opts
-        sqosum += opts*opts
-        val distincts = cogstates.size
-        dsum += distincts
-        sqdsum += distincts*distincts
-        // val u = cogstates.toSeq.maxBy({ case (v, n) => n })._1
-        // def shared(u: Seq[Int], v: Seq[Int]): Double = {
-        //   val n = m.numConcepts * (m.numConcepts-1) / 2
-        //   require(u.size == n)
-        //   require(v.size == n)
-        //   var sames = 0
-        //   for (i <- 0 until n if u(i) == v(i)) sames += 1
-        //   sames / n
-        // }
-        // val s = (for ((v, n) <- cogstates) yield n*shared(u, v)).sum
-        // ssum += s
-        // sqssum += s*s
+        initCogstates(m)
+        val o = opts
+        osum += o
+        sqosum += o*o
+        val d = distincts
+        dsum += d
+        sqdsum += d*d
+        val popIds = mostPopular()
+        val (_, h) = maxBy(popIds, i => homogeneity(m, i))
+        hsum += h
+        sqhsum += h*h
       }
       val n = numReps
       def sd(sum: Double, sqsum: Double): Double =
         scala.math.sqrt((sqsum/n)-((sum/n)*(sum/n)))
-      print(s"$cognitive ${osum/n} ${sd(osum, sqosum)}")
-      println(s" ${dsum/n} ${sd(dsum, sqdsum)}")
-      // print(s"$cognitive ${osum/n} ${sd(osum, sqosum)} ${dsum/n} ")
-      // println(s"${sd(dsum, sqdsum)} ${ssum/n} ${sd(ssum, sqssum)}")
+      writeToFile (fileName, true) { out =>
+        out.print(s"$cognitive ${osum/n} ${sd(osum, sqosum)} ${dsum/n} ")
+        out.println(s"${sd(dsum, sqdsum)} ${hsum/n} ${sd(hsum, sqhsum)}")
+      }
     }
   }
 
@@ -550,11 +537,17 @@ object VoterModel {
   }
 
   def main(args: Array[String]): Unit = {
-    // runManyOpt
-    if (args.size == 1)
-      runOnceOpt(args(0))
+    if (args.size == 4)
+      runManyOpt(args(0).toDouble, args(1).toDouble, args(2).toDouble,
+        args(3))
     else
-      println("Usage: VoterModel <filename>")
+      println("Usage: VoterModel <start> <end> <step> <filename>")
+    //
+    // if (args.size == 1)
+    //   runOnceOpt(args(0))
+    // else
+    //   println("Usage: VoterModel <filename>")
+    //
     // if (args.size == 4)
     //   runManyEnergy(args(0).toDouble, args(1).toDouble,
     //     args(2).toDouble, args(3))
