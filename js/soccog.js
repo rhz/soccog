@@ -161,6 +161,7 @@ function mostPopular() {
   return ids;
 }
 
+// n and m are belief matrices
 function shared(n, m) {
   var r = 0;
   for (var i = 0; i < (params.M-1); i++) {
