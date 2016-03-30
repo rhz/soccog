@@ -25,6 +25,10 @@ var colour = d3.scale.linear()
   .domain([0, 0.2, 0.4, 0.6, 0.8, 1])
   .range(["red", "blue", "green", "yellow", "white"]);
 
+// function cogfraction(n) {
+//   return (numTriangles - (n.cognitive/params.J)) / (2*numTriangles);
+// }
+
 var width = 800,
     height = 600,
     params = {},
@@ -34,7 +38,9 @@ var width = 800,
     links = [],
     svg = null,
     force = null,
-    active = false;
+    active = false,
+    cogfraction = null,
+    nodeColouring = 0;
 
 function initParams() {
   params = {
@@ -44,8 +50,8 @@ function initParams() {
     J: parseFloat($("input[name=J]").val()), // cognitive factor
     K: parseFloat($("input[name=K]").val())  // mean degree
   };
-  numBeliefs = params.M * (params.M - 1) / 2;
-  numTriangles = choose(params.M, 3);
+  numBeliefs = params.M * (params.M - 1) / 2; // choose(params.M, 2);
+  numTriangles = params.M * (params.M - 1) * (params.M - 2) / 6; // choose(params.M, 3);
 }
 
 // create multidimensional array and assign random values
@@ -65,7 +71,7 @@ function initNodes() {
     nodes[x] = {
       name: x,
       beliefs: m,
-      // count: count(m),
+      count: count(m),
       cognitive: cog(m)
     };
   }
@@ -225,18 +231,21 @@ function updateBelief(x, i, j, v) {
 
 function step() {
   var rnd = randomBelief(),
-      energydiff = updateBelief(rnd.node, rnd.i, rnd.j, rnd.newvalue);
+      energydiff = updateBelief(rnd.node, rnd.i, rnd.j, rnd.newvalue),
+      successful = true;
 
   if ((energydiff.total > 0) &&
       (Math.random() > Math.exp(-energydiff.total))) {
     // backtrack
     updateBelief(rnd.node, rnd.i, rnd.j, rnd.oldvalue);
-    energydiff = { social: 0.0, cognitive: 0.0, total: 0.0 };
+    successful = false;
   }
 
-  // merge rnd and energydiff
-  for (var k in rnd) { energydiff[k] = rnd[k]; }
-  return energydiff;
+  var diff = energydiff;
+  // merge rnd and energydiff into res and add successful
+  for (var k in rnd) { diff[k] = rnd[k]; }
+  diff.successful = successful;
+  return diff;
 }
 
 // GUI callbacks
@@ -247,8 +256,74 @@ function start() {
 
 function nextEvent() {
   if (active) {
+    var rr = parseInt($("input[name=refresh-rate]").val());
     var diff = step();
-    while (diff.total == 0.0) diff = step();
+    while (rr != 0) {
+      while (diff.successful == false) {
+        // for (var k = 0; k < links.length; k++) {
+        //   if ((links[k].source == nodes[diff.node]) ||
+        //       (links[k].target == nodes[diff.node])) {
+        //     var s = shared(links[k].source.beliefs,
+        //                    links[k].target.beliefs);
+        //     if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
+        //       console.log("!!! " + links[k].shared + " != " + s + " !!!");
+        //       console.log(diff);
+        //       console.log(links[k].source.name + ": " + links[k].source.beliefs[diff.i][diff.j]);
+        //       console.log(links[k].target.name + ": " + links[k].target.beliefs[diff.i][diff.j]);
+        //       return;
+        //     }
+        //   }
+        // }
+        diff = step();
+      }
+
+      // update links
+      for (var k = 0; k < links.length; k++) {
+        if (links[k].source == nodes[diff.node]) {
+          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+          if (diff.newvalue == links[k].target.beliefs[diff.i][diff.j])
+            links[k].shared += 1 / numBeliefs;
+          else if (diff.oldvalue == links[k].target.beliefs[diff.i][diff.j])
+            links[k].shared -= 1 / numBeliefs;
+          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+          // var s = shared(links[k].source.beliefs,
+          //                links[k].target.beliefs);
+          // if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
+          //   console.log("!!! " + links[k].shared + " != " + s + " !!!");
+          //   console.log(links[k].source.beliefs[diff.i][diff.j]);
+          //   console.log(links[k].target.beliefs[diff.i][diff.j]);
+          //   return;
+          // }
+        }
+        if (links[k].target == nodes[diff.node]) {
+          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+          if (diff.newvalue == links[k].source.beliefs[diff.i][diff.j])
+            links[k].shared += 1 / numBeliefs;
+          else if (diff.oldvalue == links[k].source.beliefs[diff.i][diff.j])
+            links[k].shared -= 1 / numBeliefs;
+          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+          // var s = shared(links[k].source.beliefs,
+          //                links[k].target.beliefs);
+          // if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
+          //   console.log("!!! " + links[k].shared + " != " + s + " !!!");
+          //   console.log(links[k].source.beliefs[diff.i][diff.j]);
+          //   console.log(links[k].target.beliefs[diff.i][diff.j]);
+          //   return;
+          // }
+        }
+        // if ((links[k].source == nodes[diff.node]) ||
+        //     (links[k].target == nodes[diff.node])) {
+        //   console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+        //   if (links[k].source.beliefs[diff.i][diff.j] ==
+        //       links[k].target.beliefs[diff.i][diff.j])
+        //     links[k].shared += 1 / numBeliefs;
+        //   else links[k].shared -= 1 / numBeliefs;
+        //   console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
+        // }
+      }
+
+      rr -= 1;
+    }
     waitGUI(diff);
   }
 }
@@ -266,16 +341,6 @@ function waitGUI(diff) {
 function updateGUI(diff) {
   console.log(diff);
 
-  // update links
-  for (var k = 0; k < links.length; k++) {
-    if ((links[k].source == diff.node) ||
-        (links[k].target == diff.node)) {
-      if (nodes[links[k].source].beliefs[i][j] ==
-          nodes[links[k].target].beliefs[i][j])
-        links.shared += 1 / numBeliefs;
-      else links.shared -= 1 / numBeliefs;
-    }
-  }
   svg.selectAll(".link")
     .style("stroke-width", linkWidth)
     .select("title").text(linkText);
@@ -287,14 +352,13 @@ function updateGUI(diff) {
     .alpha(.03);
 
   // update nodes
-  // if (diff.newvalue == 1)
-  //   nodes[diff.node].count += 1 / numBeliefs;
-  // else if (diff.oldvalue == 1)
-  //   nodes[diff.node].count -= 1 / numBeliefs;
+  if (diff.newvalue == 1)
+    nodes[diff.node].count += 1 / numBeliefs;
+  else if (diff.oldvalue == 1)
+    nodes[diff.node].count -= 1 / numBeliefs;
   nodes[diff.node].cognitive += diff.cognitive;
   svg.selectAll(".node")
-    .style("fill", nodeColour)
-    .select("title").text(nodeText);
+    .style("fill", nodeColour);
 
   // continue
   nextEvent();
@@ -305,8 +369,28 @@ function stop() {
 }
 
 function nodeColour(n) {
-  return colour((numTriangles - (n.cognitive / params.J)) /
-                (2 * numTriangles));
+  if (nodeColouring == 0)
+    return colour(cogfraction(n.cognitive));
+  else if (nodeColouring == 1)
+    return colour(n.count);
+  else
+    return colour(0);
+}
+
+function colourByCog() {
+  nodeColouring = 0;
+  $("#colour-by-cog").addClass('active');
+  $("#colour-by-count").removeClass('active');
+  svg.selectAll(".node")
+    .style("fill", nodeColour);
+}
+
+function colourByCount() {
+  nodeColouring = 1;
+  $("#colour-by-count").addClass('active');
+  $("#colour-by-cog").removeClass('active');
+  svg.selectAll(".node")
+    .style("fill", nodeColour);
 }
 
 function linkWidth(l) {
@@ -328,7 +412,7 @@ function linkText(l) {
 }
 
 function nodeText(n) {
-  return n.cognitive;//name;
+  return n.name;
 }
 
 function restart() {
@@ -336,6 +420,10 @@ function restart() {
   initNodes(params.N, params.M);
   initLinks(params.N, params.K);
   initCogstates();
+
+  cogfraction = d3.scale.linear()
+    .domain([-numTriangles*params.J, numTriangles*params.J])
+    .range([1, 0]);
 
   force = d3.layout.force()
     .charge(-80)
@@ -352,8 +440,8 @@ function restart() {
     .data(links)
     .enter()
     .append("line")
-      .attr("class", "link")
-      .style("stroke-width", linkWidth);
+    .attr("class", "link")
+    .style("stroke-width", linkWidth);
 
   link.append("title").text(linkText);
 
@@ -361,12 +449,13 @@ function restart() {
     .data(nodes)
     .enter()
     .append("circle")
-      .attr("class", "node")
-      .attr("r", 5)
-      .style("fill", nodeColour)
-      .style("stroke", "black")
-      .style("stroke-width", "0.5px")
-      .call(force.drag);
+    .attr("class", "node")
+    .attr("r", 5)
+    .style("fill", nodeColour)
+    .style("stroke", "black")
+    .style("stroke-width", "0.5px")
+    .on("click", function(n) { console.log(n); })
+    .call(force.drag);
 
   node.append("title").text(nodeText);
 

@@ -68,6 +68,29 @@
             <span>ms</span>
           </div>
         </div>
+        <div class="row" style="margin-top: 20px">
+          <div class="col-md-9">
+            <label for="refresh-rate">Refresh every successful steps:</label>
+            <input type="text" name="refresh-rate" value="1" size="2"></input>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 20px">
+          <div class="col-md-12">
+            <label for="refresh-rate">Node colouring:</label>
+            <div class="btn-group" role="group" aria-label="node colouring">
+              <button type="button" class="btn btn-default active"
+                      id="colour-by-cog" onclick="colourByCog();">
+                Cognitive energy
+              </button>
+              <button type="button" class="btn btn-default"
+                      id="colour-by-count" onclick="colourByCount();">
+                Number of positive beliefs
+              </button>
+            </div>
+            <!-- <input type="radio" name="node-colouring" checked>Cognitive energy</input> -->
+            <!-- <input type="radio" name="node-colouring">Count</input> -->
+          </div>
+        </div>
       </div>
     </div>
   </div>
