@@ -18,9 +18,6 @@ function choose(n, k) {
   return r;
 }
 
-// var colour = d3.scale.linear()
-//   .domain([0, 0.5, 1])
-//   .range(["red", "green", "blue"]);
 var colour = d3.scale.linear()
   .domain([0, 0.2, 0.4, 0.6, 0.8, 1])
   .range(["red", "blue", "green", "yellow", "white"]);
@@ -241,8 +238,8 @@ function step() {
     successful = false;
   }
 
+  // merge rnd and energydiff into diff and add successful
   var diff = energydiff;
-  // merge rnd and energydiff into res and add successful
   for (var k in rnd) { diff[k] = rnd[k]; }
   diff.successful = successful;
   return diff;
@@ -259,68 +256,30 @@ function nextEvent() {
     var rr = parseInt($("input[name=refresh-rate]").val());
     var diff = step();
     while (rr != 0) {
-      while (diff.successful == false) {
-        // for (var k = 0; k < links.length; k++) {
-        //   if ((links[k].source == nodes[diff.node]) ||
-        //       (links[k].target == nodes[diff.node])) {
-        //     var s = shared(links[k].source.beliefs,
-        //                    links[k].target.beliefs);
-        //     if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
-        //       console.log("!!! " + links[k].shared + " != " + s + " !!!");
-        //       console.log(diff);
-        //       console.log(links[k].source.name + ": " + links[k].source.beliefs[diff.i][diff.j]);
-        //       console.log(links[k].target.name + ": " + links[k].target.beliefs[diff.i][diff.j]);
-        //       return;
-        //     }
-        //   }
-        // }
-        diff = step();
-      }
+      while (diff.successful == false) diff = step();
 
       // update links
       for (var k = 0; k < links.length; k++) {
         if (links[k].source == nodes[diff.node]) {
-          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
           if (diff.newvalue == links[k].target.beliefs[diff.i][diff.j])
             links[k].shared += 1 / numBeliefs;
           else if (diff.oldvalue == links[k].target.beliefs[diff.i][diff.j])
             links[k].shared -= 1 / numBeliefs;
-          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
-          // var s = shared(links[k].source.beliefs,
-          //                links[k].target.beliefs);
-          // if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
-          //   console.log("!!! " + links[k].shared + " != " + s + " !!!");
-          //   console.log(links[k].source.beliefs[diff.i][diff.j]);
-          //   console.log(links[k].target.beliefs[diff.i][diff.j]);
-          //   return;
-          // }
         }
         if (links[k].target == nodes[diff.node]) {
-          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
           if (diff.newvalue == links[k].source.beliefs[diff.i][diff.j])
             links[k].shared += 1 / numBeliefs;
           else if (diff.oldvalue == links[k].source.beliefs[diff.i][diff.j])
             links[k].shared -= 1 / numBeliefs;
-          // console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
-          // var s = shared(links[k].source.beliefs,
-          //                links[k].target.beliefs);
-          // if ((links[k].shared < s-(1e-6)) || (links[k].shared > s+(1e-6))) {
-          //   console.log("!!! " + links[k].shared + " != " + s + " !!!");
-          //   console.log(links[k].source.beliefs[diff.i][diff.j]);
-          //   console.log(links[k].target.beliefs[diff.i][diff.j]);
-          //   return;
-          // }
         }
-        // if ((links[k].source == nodes[diff.node]) ||
-        //     (links[k].target == nodes[diff.node])) {
-        //   console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
-        //   if (links[k].source.beliefs[diff.i][diff.j] ==
-        //       links[k].target.beliefs[diff.i][diff.j])
-        //     links[k].shared += 1 / numBeliefs;
-        //   else links[k].shared -= 1 / numBeliefs;
-        //   console.log(links[k].source.name + ", " + links[k].target.name + ", " + links[k].shared);
-        // }
       }
+
+      // update nodes
+      if (diff.newvalue == 1)
+        nodes[diff.node].count += 1 / numBeliefs;
+      else if (diff.oldvalue == 1)
+        nodes[diff.node].count -= 1 / numBeliefs;
+      nodes[diff.node].cognitive += diff.cognitive;
 
       rr -= 1;
     }
@@ -339,24 +298,17 @@ function waitGUI(diff) {
 }
 
 function updateGUI(diff) {
-  console.log(diff);
+  // console.log(diff);
 
-  svg.selectAll(".link")
-    .style("stroke-width", linkWidth)
-    .select("title").text(linkText);
-
-  // update graph
   force
     .linkDistance(linkDistance)
     .linkStrength(linkStrength)
     .alpha(.03);
 
-  // update nodes
-  if (diff.newvalue == 1)
-    nodes[diff.node].count += 1 / numBeliefs;
-  else if (diff.oldvalue == 1)
-    nodes[diff.node].count -= 1 / numBeliefs;
-  nodes[diff.node].cognitive += diff.cognitive;
+  svg.selectAll(".link")
+    .style("stroke-width", linkWidth)
+    .select("title").text(linkText);
+
   svg.selectAll(".node")
     .style("fill", nodeColour);
 
