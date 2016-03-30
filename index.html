@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
-  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css"> -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css">
   <style>
 .node {
   stroke: #fff;
@@ -78,13 +78,17 @@
           <div class="col-md-12">
             <label for="refresh-rate">Node colouring:</label>
             <div class="btn-group" role="group" aria-label="node colouring">
+              <button type="button" class="btn btn-default" title="number of positive beliefs"
+                      id="colour-by-count" onclick="colourByCount();">
+                P beliefs
+              </button>
               <button type="button" class="btn btn-default active"
                       id="colour-by-cog" onclick="colourByCog();">
                 Cognitive energy
               </button>
               <button type="button" class="btn btn-default"
-                      id="colour-by-count" onclick="colourByCount();">
-                Number of positive beliefs
+                      id="colour-by-cogstate" onclick="colourByCogstate();">
+                Cogstate
               </button>
             </div>
           </div>

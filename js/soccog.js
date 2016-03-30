@@ -2,6 +2,11 @@ function randomInt(n) {
   return Math.floor(Math.random() * n);
 }
 
+function randomColour() {
+  // return "hsl(" + Math.random()*360 + ",100%,50%)";
+  return "rgb(" + randomInt(255) + "," + randomInt(255) + "," + randomInt(255) + ")";
+}
+
 var fm = [];
 function factorial (n) {
   if (n == 0 || n == 1)
@@ -21,6 +26,11 @@ function choose(n, k) {
 var colour = d3.scale.linear()
   .domain([0, 0.2, 0.4, 0.6, 0.8, 1])
   .range(["red", "blue", "green", "yellow", "white"]);
+
+// var numCogstates = 200;
+// var rainbow = d3.scale.linear()
+//   .domain([0, numCogstates/7, numCogstates*2/7, numCogstates*3/7, numCogstates*4/7, numCogstates*5/7, numCogstates*6/7, numCogstates])
+//   .range(["black", "red", "blue", "green", "#ff00ff", "#00ffff", "yellow", "white"]); // yellow is #ffff00
 
 // function cogfraction(n) {
 //   return (numTriangles - (n.cognitive/params.J)) / (2*numTriangles);
@@ -116,10 +126,11 @@ function cog(m) {
 }
 
 var freshId = 0,
-    lastId = 0,
+    // lastId = 0,
     cogstateCount = [],
     cogstateIdOfNode = [],
-    idOfCogstate = {};
+    idOfCogstate = {},
+    cogstateColour = [];
 
 // m is the belief matrix
 function cogstate(m) {
@@ -132,7 +143,6 @@ function cogstate(m) {
 
 function initCogstates() {
   freshId = 0;
-  lastId = 0;
   cogstateCount = [];
   cogstateIdOfNode = [];
   idOfCogstate = {};
@@ -146,6 +156,7 @@ function initCogstates() {
       freshId += 1;
       idOfCogstate[v] = id;
       cogstateCount[id] = 1;
+      cogstateColour.push(randomColour());
     }
     cogstateIdOfNode[x] = id;
   }
@@ -279,8 +290,26 @@ function nextEvent() {
         nodes[diff.node].count += 1 / numBeliefs;
       else if (diff.oldvalue == 1)
         nodes[diff.node].count -= 1 / numBeliefs;
+
       nodes[diff.node].cognitive += diff.cognitive;
 
+      // update cogstates
+      var oldcogstate = cogstateIdOfNode[diff.node];
+      cogstateCount[oldcogstate] -= 1;
+      var v = cogstate(nodes[diff.node].beliefs);
+      var id = freshId;
+      if (v in idOfCogstate) {
+        id = idOfCogstate[v];
+        cogstateCount[id] += 1;
+      } else { // new cogstate found
+        freshId += 1;
+        cogstateColour.push(randomColour());
+        idOfCogstate[v] = id;
+        cogstateCount[id] = 1;
+      }
+      cogstateIdOfNode[diff.node] = id;
+
+      // decrease refresh rate
       rr -= 1;
     }
     waitGUI(diff);
@@ -325,6 +354,8 @@ function nodeColour(n) {
     return colour(cogfraction(n.cognitive));
   else if (nodeColouring == 1)
     return colour(n.count);
+  else if (nodeColouring == 2)
+    return cogstateColour[cogstateIdOfNode[n.name]];
   else
     return colour(0);
 }
@@ -333,16 +364,24 @@ function colourByCog() {
   nodeColouring = 0;
   $("#colour-by-cog").addClass('active');
   $("#colour-by-count").removeClass('active');
-  svg.selectAll(".node")
-    .style("fill", nodeColour);
+  $("#colour-by-cogstate").removeClass('active');
+  svg.selectAll(".node").style("fill", nodeColour);
 }
 
 function colourByCount() {
   nodeColouring = 1;
-  $("#colour-by-count").addClass('active');
   $("#colour-by-cog").removeClass('active');
-  svg.selectAll(".node")
-    .style("fill", nodeColour);
+  $("#colour-by-count").addClass('active');
+  $("#colour-by-cogstate").removeClass('active');
+  svg.selectAll(".node").style("fill", nodeColour);
+}
+
+function colourByCogstate() {
+  nodeColouring = 2;
+  $("#colour-by-count").removeClass('active');
+  $("#colour-by-cog").removeClass('active');
+  $("#colour-by-cogstate").addClass('active');
+  svg.selectAll(".node").style("fill", nodeColour);
 }
 
 function linkWidth(l) {
