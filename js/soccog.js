@@ -24,8 +24,8 @@ function choose(n, k) {
 }
 
 var colour = d3.scale.linear()
-  .domain([0, 0.2, 0.4, 0.6, 0.8, 1])
-  .range(["red", "blue", "green", "yellow", "white"]);
+  .domain([   0,    0.2,     0.4,       0.6,      0.8,       1])
+  .range(["red", "blue", "green", "#ff00ff", "yellow", "white"]);
 
 // var numCogstates = 200;
 // var rainbow = d3.scale.linear()
@@ -327,12 +327,12 @@ function waitGUI(diff) {
 }
 
 function updateGUI(diff) {
-  // console.log(diff);
+  console.log(diff);
 
   force
     .linkDistance(linkDistance)
     .linkStrength(linkStrength)
-    .alpha(.03);
+    .start();
 
   svg.selectAll(".link")
     .style("stroke-width", linkWidth)
@@ -386,12 +386,12 @@ function colourByCogstate() {
 
 function linkWidth(l) {
   var s = l.shared;
-  return 0.5+s*s*s*10;
+  return 0.5+4*s;
 }
 
 function linkDistance(l) {
   var d = 1-l.shared;
-  return 20+(180*d*d*d);
+  return 1.2*params.N+(4*params.N*d);
 }
 
 function linkStrength(l) {
@@ -443,8 +443,6 @@ function restart() {
     .attr("class", "node")
     .attr("r", 5)
     .style("fill", nodeColour)
-    .style("stroke", "black")
-    .style("stroke-width", "0.5px")
     .on("click", function(n) { console.log(n); })
     .call(force.drag);
 
