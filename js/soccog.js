@@ -391,7 +391,7 @@ function linkWidth(l) {
 
 function linkDistance(l) {
   var d = 1-l.shared;
-  return 1.2*params.N+(4*params.N*d);
+  return 1.1*params.N+(40*Math.log(params.N)*d);
 }
 
 function linkStrength(l) {
