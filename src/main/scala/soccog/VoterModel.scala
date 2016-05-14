@@ -34,7 +34,7 @@ class VoterModel(
       var e = 0.0
       for (i <- 0 until numConcepts; j <- (i+1) until numConcepts)
         for (y <- friends)
-          e -= beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+          e -= beliefs(i)(j) * y.beliefs(i)(j) * social
       e
     }
     def energy: Double = {
@@ -43,7 +43,7 @@ class VoterModel(
         for (k <- (j+1) until numConcepts)
           e -= beliefs(i)(j) * beliefs(j)(k) * beliefs(k)(i) * cognitive
         for (y <- friends)
-          e -= beliefs(i)(j) * y.beliefs(i)(j) * social / 2
+          e -= beliefs(i)(j) * y.beliefs(i)(j) * social
       }
       e
     }
@@ -58,16 +58,13 @@ class VoterModel(
     var sediff = 0.0 // social energy difference
     var cediff = 0.0 // cognitive energy difference
     for (k <- 0 until numConcepts if (k != i) && (k != j))
-      cediff += x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
+      cediff += x.beliefs(j)(k) * x.beliefs(k)(i)
     for (y <- x.friends)
-      sediff += x.beliefs(i)(j) * y.beliefs(i)(j)
+      sediff += y.beliefs(i)(j) * 2
+    val diff = x.beliefs(i)(j) - value
     x.beliefs(i)(j) = value
     x.beliefs(j)(i) = value
-    for (k <- 0 until numConcepts if (k != i) && (k != j))
-      cediff -= x.beliefs(i)(j) * x.beliefs(j)(k) * x.beliefs(k)(i)
-    for (y <- x.friends)
-      sediff -= x.beliefs(i)(j) * y.beliefs(i)(j)
-    (sediff * social, cediff * cognitive)
+    (sediff * diff * social, cediff * diff * cognitive)
   }
 
   def cognitiveEnergy: Double =
