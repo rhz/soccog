@@ -458,9 +458,158 @@ $(document).ready(function() {
     .attr("width", "100%")
     .attr("height", height);
   width = svg.node().getBoundingClientRect().width;
-  restart();
+  karate();
+  // restart();
 });
+
+// TODO: it would be nice to have a live histogram of the
+// number of individuals in each distinct cognitive state
+// and maybe also a matrix that tells you have many shared beliefs
+// each pair of distinct cognitive states have.
 
 // TODO: how do we plot the results of many simulations?
 function plot() {}
 
+function karate() {
+  initParams();
+  params.N = 34;
+  initNodes(params.N, params.M);
+  initCogstates();
+
+  // make links
+  links = [
+    { source: 1, target: 2, shared: 0.0 },
+    { source: 1, target: 3, shared: 0.0 },
+    { source: 2, target: 3, shared: 0.0 },
+    { source: 1, target: 4, shared: 0.0 },
+    { source: 2, target: 4, shared: 0.0 },
+    { source: 3, target: 4, shared: 0.0 },
+    { source: 1, target: 5, shared: 0.0 },
+    { source: 1, target: 6, shared: 0.0 },
+    { source: 1, target: 7, shared: 0.0 },
+    { source: 5, target: 7, shared: 0.0 },
+    { source: 6, target: 7, shared: 0.0 },
+    { source: 1, target: 8, shared: 0.0 },
+    { source: 2, target: 8, shared: 0.0 },
+    { source: 3, target: 8, shared: 0.0 },
+    { source: 4, target: 8, shared: 0.0 },
+    { source: 1, target: 9, shared: 0.0 },
+    { source: 3, target: 9, shared: 0.0 },
+    { source: 3, target: 10, shared: 0.0 },
+    { source: 1, target: 11, shared: 0.0 },
+    { source: 5, target: 11, shared: 0.0 },
+    { source: 6, target: 11, shared: 0.0 },
+    { source: 1, target: 12, shared: 0.0 },
+    { source: 1, target: 13, shared: 0.0 },
+    { source: 4, target: 13, shared: 0.0 },
+    { source: 1, target: 14, shared: 0.0 },
+    { source: 2, target: 14, shared: 0.0 },
+    { source: 3, target: 14, shared: 0.0 },
+    { source: 4, target: 14, shared: 0.0 },
+    { source: 6, target: 17, shared: 0.0 },
+    { source: 7, target: 17, shared: 0.0 },
+    { source: 1, target: 18, shared: 0.0 },
+    { source: 2, target: 18, shared: 0.0 },
+    { source: 1, target: 20, shared: 0.0 },
+    { source: 2, target: 20, shared: 0.0 },
+    { source: 1, target: 22, shared: 0.0 },
+    { source: 2, target: 22, shared: 0.0 },
+    { source: 24, target: 26, shared: 0.0 },
+    { source: 25, target: 26, shared: 0.0 },
+    { source: 3, target: 28, shared: 0.0 },
+    { source: 24, target: 28, shared: 0.0 },
+    { source: 25, target: 28, shared: 0.0 },
+    { source: 3, target: 29, shared: 0.0 },
+    { source: 24, target: 30, shared: 0.0 },
+    { source: 27, target: 30, shared: 0.0 },
+    { source: 2, target: 31, shared: 0.0 },
+    { source: 9, target: 31, shared: 0.0 },
+    { source: 1, target: 32, shared: 0.0 },
+    { source: 25, target: 32, shared: 0.0 },
+    { source: 26, target: 32, shared: 0.0 },
+    { source: 29, target: 32, shared: 0.0 },
+    { source: 3, target: 33, shared: 0.0 },
+    { source: 9, target: 33, shared: 0.0 },
+    { source: 15, target: 33, shared: 0.0 },
+    { source: 16, target: 33, shared: 0.0 },
+    { source: 19, target: 33, shared: 0.0 },
+    { source: 21, target: 33, shared: 0.0 },
+    { source: 23, target: 33, shared: 0.0 },
+    { source: 24, target: 33, shared: 0.0 },
+    { source: 30, target: 33, shared: 0.0 },
+    { source: 31, target: 33, shared: 0.0 },
+    { source: 32, target: 33, shared: 0.0 },
+    { source: 9, target: 34, shared: 0.0 },
+    { source: 10, target: 34, shared: 0.0 },
+    { source: 14, target: 34, shared: 0.0 },
+    { source: 15, target: 34, shared: 0.0 },
+    { source: 16, target: 34, shared: 0.0 },
+    { source: 19, target: 34, shared: 0.0 },
+    { source: 20, target: 34, shared: 0.0 },
+    { source: 21, target: 34, shared: 0.0 },
+    { source: 23, target: 34, shared: 0.0 },
+    { source: 24, target: 34, shared: 0.0 },
+    { source: 27, target: 34, shared: 0.0 },
+    { source: 28, target: 34, shared: 0.0 },
+    { source: 29, target: 34, shared: 0.0 },
+    { source: 30, target: 34, shared: 0.0 },
+    { source: 31, target: 34, shared: 0.0 },
+    { source: 32, target: 34, shared: 0.0 },
+    { source: 33, target: 34, shared: 0.0 }
+  ];
+
+  for (var x = 0; x < links.length; x++) {
+    var src = links[x].source - 1,
+        tgt = links[x].target - 1;
+    links[x].source = src;
+    links[x].target = tgt;
+    links[x].shared = shared(nodes[src].beliefs,
+                             nodes[tgt].beliefs);
+  }
+
+  cogfraction = d3.scale.linear()
+    .domain([-numTriangles*params.J, numTriangles*params.J])
+    .range([1, 0]);
+
+  force = d3.layout.force()
+    .charge(-80)
+    .linkDistance(linkDistance)
+    .linkStrength(linkStrength)
+    .size([width, height])
+    .nodes(nodes)
+    .links(links)
+    .start();
+
+  svg.empty();
+
+  var link = svg.selectAll(".link")
+    .data(links)
+    .enter()
+    .append("line")
+    .attr("class", "link")
+    .style("stroke-width", linkWidth);
+
+  link.append("title").text(linkText);
+
+  var node = svg.selectAll(".node")
+    .data(nodes)
+    .enter()
+    .append("circle")
+    .attr("class", "node")
+    .attr("r", 5)
+    .style("fill", nodeColour)
+    .on("click", function(n) { console.log(n); })
+    .call(force.drag);
+
+  node.append("title").text(nodeText);
+
+  force.on("tick", function() {
+    link.attr("x1", function(l) { return l.source.x; })
+        .attr("y1", function(l) { return l.source.y; })
+        .attr("x2", function(l) { return l.target.x; })
+        .attr("y2", function(l) { return l.target.y; });
+
+    node.attr("cx", function(n) { return n.x; })
+        .attr("cy", function(n) { return n.y; });
+  });
+}
