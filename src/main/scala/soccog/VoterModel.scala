@@ -522,6 +522,141 @@ object VoterModel {
     }
   }
 
+  def runManyCogs(start: Double, end: Double, step: Double,
+    baseName: String): Unit = {
+    val fileName = baseName + ".out"
+    writeToFile (fileName) { out =>
+      out.println(s"# N=$numNodes E=$numEdges M=$numConcepts numSteps=$numSteps numReps=$numReps")
+      out.print("log_M(ratio) I J soc sd(soc) \"soc efficiency\" \"sd(soc efficiency)\"")
+      out.print(" cog sd(cog) \"cog efficiency\" \"sd(cog efficiency)\"")
+      out.print(" total sd(total) \"total efficiency\" \"sd(total efficiency)\"")
+      out.println(" \"number of distinct cogstates\" \"sd(distinct cogstates)\"")
+    }
+    val formatter = new java.text.DecimalFormat("#.###")
+    val minEnergy = minimumEnergy
+    val psumss = mutable.ArrayBuffer.empty[Array[Double]]
+    val sqpsumss = mutable.ArrayBuffer.empty[Array[Double]]
+    val numCogs = 9
+    val n = numReps
+    def sd(sum: Double, sqsum: Double): Double =
+      scala.math.sqrt((sqsum/n)-((sum/n)*(sum/n)))
+    for (logratio <- start to end by step) {
+      // TODO: change name of the function setTemp
+      setTemp(minEnergy, scala.math.pow(numConcepts, logratio))
+      val me = minimumEnergy
+      assert((minEnergy > me-(1e-8)) && (minEnergy < me+(1e-8)), s"$minEnergy != $me")
+      // sum of the energies and their squares
+      // to compute the mean and standard deviation
+      var sum = 0.0
+      var sqsum = 0.0
+      var ssum = 0.0
+      var sqssum = 0.0
+      var csum = 0.0
+      var sqcsum = 0.0
+      // efficiencies
+      var esum = 0.0
+      var sqesum = 0.0
+      var sesum = 0.0
+      var sqsesum = 0.0
+      var cesum = 0.0
+      var sqcesum = 0.0
+      // and for the cogstate counts
+      var nsum = 0.0 // number of different cogstates
+      var sqnsum = 0.0
+      // number of individuals in each cogstate ordered by popularity
+      val psums = Array.fill(numCogs)(0.0)
+      val sqpsums = Array.fill(numCogs)(0.0)
+      val histFile = baseName + "-" + formatter.format(logratio) + ".hist"
+      writeToFile (histFile) { out =>
+        out.print(s"# N=$numNodes E=$numEdges M=$numConcepts I=$social")
+        out.println(s" J=$cognitive numSteps=$numSteps numReps=$numReps")
+      }
+      for (n <- 1 to numReps) {
+        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+        // create random initial graph
+        val rnd = new Random()
+        m.randomiseFriendsE(numEdges, rnd)
+        m.randomiseCogstates(rnd)
+        // run simulation
+        for (_ <- 1 to numSteps) m.step(rnd)
+        // observe final state
+        initCogstates(m)
+        // accumulate the energies
+        val mse = minSocEnergy
+        val mse2 = mse+mse
+        val mce = minCogEnergy
+        val mce2 = mce+mce
+        val me2 = minEnergy+minEnergy
+        val se = m.socialEnergy
+        assert(se >= mse-(1e-8), s"soc: $se < $mse")
+        ssum += se
+        sqssum += se*se
+        val seff = (se+mse)/mse2
+        assert(seff <= 1.0+(1e-8), s"soc: $seff > 1.0")
+        sesum += seff
+        sqsesum += seff*seff
+        val ce = m.cognitiveEnergy
+        assert(ce >= mce-(1e-8), s"cog: $ce < $mce")
+        csum += ce
+        sqcsum += ce*ce
+        val ceff = (ce+mce)/mce2
+        assert(ceff <= 1.0+(1e-8), s"cog: $ceff > 1.0")
+        cesum += ceff
+        sqcesum += ceff*ceff
+        val e = se+ce
+        assert(e >= minEnergy-(1e-8), s"total: $e < $minEnergy")
+        sum += e
+        sqsum += e*e
+        val eff = (e+minEnergy)/me2
+        assert(eff <= 1.0+(1e-8), s"total: $eff > 1.0")
+        esum += eff
+        sqesum += eff*eff
+        // and the cogstate counts
+        val cogstates = cogstateCount.values.toSeq.sorted.reverse
+        val cs = cogstates.size
+        nsum += cs
+        sqnsum += cs*cs
+        // for ((p, i) <- cogstates.zipWithIndex if psums contains i) {
+        for (i <- 0 until numCogs if i < cogstates.size) {
+          val p = cogstates(i)
+          psums(i) += p
+          sqpsums(i) += p*p
+        }
+        // add a line to the histogram
+        writeToFile (histFile, true) { out =>
+          out.println(cogstates.mkString(" "))
+        }
+      }
+      writeToFile (fileName, true) { out =>
+        out.print(s"${formatter.format(logratio)} $social $cognitive")
+        out.print(s" ${ssum/n} ${sd(ssum, sqssum)} ${sesum/n} ${sd(sesum, sqsesum)}")
+        out.print(s" ${csum/n} ${sd(csum, sqcsum)} ${cesum/n} ${sd(cesum, sqcesum)}")
+        out.print(s" ${sum/n} ${sd(sum, sqsum)} ${esum/n} ${sd(esum, sqesum)}")
+        out.println(s" ${nsum/n} ${sd(nsum, sqnsum)}")
+      }
+      psumss += psums
+      sqpsumss += sqpsums
+    }
+    val ccFile = baseName + "-cc.out"
+    writeToFile (ccFile) { out =>
+      out.println(s"# N=$numNodes E=$numEdges M=$numConcepts numSteps=$numSteps numReps=$numReps")
+      out.print("ranking ")
+      // print headers for the mean and stddev
+      out.println((for (logratio <- start to end by step) yield {
+        val r = formatter.format(logratio)
+        s"$r $r"
+      }).mkString(" "))
+    }
+    for (i <- 0 until numCogs) {
+      writeToFile (ccFile, true) { out =>
+        out.print(s"${i+1} ")
+        out.println((for (j <- 0 until psumss.size; s = psumss(j)(i)) yield
+          s"${s/n} ${sd(s, sqpsumss(j)(i))}").mkString(" "))
+      }
+    }
+  }
+
+
   // auxiliary functions
 
   def using[A <: java.io.Closeable, B](a: A)(f: A => B): B =
@@ -596,12 +731,13 @@ object VoterModel {
     }
   }
 
+
   def main(args: Array[String]): Unit = {
-    if (args.size == 4)
-      runManyOpt(args(0).toDouble, args(1).toDouble, args(2).toDouble,
-        args(3))
-    else
-      println("Usage: VoterModel <start> <end> <step> <filename>")
+    // if (args.size == 4)
+    //   runManyEnergy(args(0).toDouble, args(1).toDouble,
+    //     args(2).toDouble, args(3))
+    // else
+    //   println("Usage: VoterModel <start> <end> <step> <filename>")
     //
     // if (args.size == 1)
     //   runOnceOpt(args(0))
@@ -609,10 +745,16 @@ object VoterModel {
     //   println("Usage: VoterModel <filename>")
     //
     // if (args.size == 4)
-    //   runManyEnergy(args(0).toDouble, args(1).toDouble,
-    //     args(2).toDouble, args(3))
+    //   runManyOpt(args(0).toDouble, args(1).toDouble, args(2).toDouble,
+    //     args(3))
     // else
-    //   println("Usage: VoterModel <start> <end> <step> <filename>")
+    //   println("Usage: VoterModel <start> <end> <step> <minimum energy> <filename>")
+    //
+    if (args.size == 4)
+      runManyCogs(args(0).toDouble, args(1).toDouble,
+        args(2).toDouble, args(3))
+    else
+      println("Usage: VoterModel <start> <end> <step> <filename>")
   }
 }
 
