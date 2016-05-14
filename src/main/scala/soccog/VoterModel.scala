@@ -251,33 +251,20 @@ object VoterModel {
     }
   }
 
-  def maxBy(xs: Iterable[Int], f: Int => Double): (Int, Double) = {
-    var max: Int = -1
-    var maxValue: Double = 0.0
-    for (x <- xs) {
-      val fx = f(x)
-      if (fx > maxValue) {
-        max = x
-        maxValue = fx
-      }
-    }
-    (max, maxValue)
-  }
 
-  // cog-states observables
+  // Cogstate observables
+
   var freshId: Int = 0
   val idOfCogstate = mutable.Map.empty[Seq[Int], Int]
   val cogstateOfId = mutable.Map.empty[Int, Seq[Int]]
   val cogstateIdOfNode = mutable.Map.empty[VoterModel#Node, Int]
   val cogstateCount = mutable.Map.empty[Int, Int]
-  val optimals = mutable.Set.empty[Int]
 
   def initCogstates(m: VoterModel): Unit = {
     idOfCogstate.clear
     cogstateOfId.clear
     cogstateIdOfNode.clear
     cogstateCount.clear
-    optimals.clear
     freshId = 0
     for (x <- m.nodes) {
       val v =
@@ -294,26 +281,25 @@ object VoterModel {
         idOfCogstate(v) = id
         cogstateOfId(id) = v
         cogstateCount(id) = 1
-        if (x.isOptimal) optimals += id
         cogstateIdOfNode(x) = id
       }
     }
   }
 
-  def opts: Int = optimals.toSeq.map(cogstateCount(_)).sum
-  def distincts: Int = optimals.count(cogstateCount(_) > 0)
 
-  // i and j are cogstate ids
-  def shared(m: VoterModel, i: Int, j: Int): Double = {
-    val n = m.numConcepts * (m.numConcepts-1) / 2
-    val u = cogstateOfId(i)
-    val v = cogstateOfId(j)
-    require(u.size == n, s"${u.size} != $n")
-    require(v.size == n, s"${v.size} != $n")
-    var sames = 0
-    for (i <- 0 until n if u(i) == v(i)) sames += 1
-    require(sames <= n, s"$sames > n")
-    sames.toDouble / n
+  // Cogstate analysis
+
+  def maxBy(xs: Iterable[Int], f: Int => Double): (Int, Double) = {
+    var max: Int = -1
+    var maxValue: Double = 0.0
+    for (x <- xs) {
+      val fx = f(x)
+      if (fx > maxValue) {
+        max = x
+        maxValue = fx
+      }
+    }
+    (max, maxValue)
   }
 
   def mostPopular(p: (Int => Boolean) = (_ => true))
@@ -332,6 +318,19 @@ object VoterModel {
     ids
   }
 
+  // i and j are cogstate ids
+  def shared(m: VoterModel, i: Int, j: Int): Double = {
+    val n = m.numConcepts * (m.numConcepts-1) / 2
+    val u = cogstateOfId(i)
+    val v = cogstateOfId(j)
+    require(u.size == n, s"${u.size} != $n")
+    require(v.size == n, s"${v.size} != $n")
+    var sames = 0
+    for (i <- 0 until n if u(i) == v(i)) sames += 1
+    require(sames <= n, s"$sames > n")
+    sames.toDouble / n
+  }
+
   def homogeneity(m: VoterModel, i: Int, p: (Int => Boolean) = (_ => true)): Double =
     (for ((j, n) <- cogstateCount if (n > 0) && p(j))
      yield n * shared(m, i, j)).sum
@@ -340,6 +339,29 @@ object VoterModel {
     p: (Int => Boolean) = (_ => true)): Double =
     (for ((j, n) <- cogstateCount if (n > 0) && (j != i) && p(j)) yield
       (n.toDouble / numDissidents) * (1.0 - shared(m, i, j))).sum
+
+
+  // Optimality observables
+
+  val optimals = mutable.Set.empty[Int]
+
+  def initOpts(m: VoterModel): Unit = {
+    optimals.clear
+    val seen = mutable.Set.empty[Int]
+    for (x <- m.nodes) {
+      val id = cogstateIdOfNode(x)
+      if (!seen(id)) {
+        if (x.isOptimal) optimals += id
+        seen += id
+      }
+    }
+  }
+
+  def opts: Int = optimals.toSeq.map(cogstateCount(_)).sum
+  def distincts: Int = optimals.count(cogstateCount(_) > 0)
+
+
+  // Simulation methods that analyse cogstates
 
   def runOnceOpt(fileName: String): Unit = {
     val m = new VoterModel(social, cognitive, numNodes, numConcepts)
@@ -350,6 +372,7 @@ object VoterModel {
     m.randomiseCogstates(rnd)
     // observables
     initCogstates(m)
+    initOpts(m)
     // memoised version of shared
     val sharedmap = mutable.Map.empty[(Int, Int), Double]
     def mshared(i: Int, j: Int): Double =
@@ -477,6 +500,7 @@ object VoterModel {
         for (_ <- 1 to numSteps) m.step(rnd)
         // observe final state
         initCogstates(m)
+        initOpts(m)
         val o = opts
         osum += o
         sqosum += o*o
