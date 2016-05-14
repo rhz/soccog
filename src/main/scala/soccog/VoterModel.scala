@@ -7,7 +7,6 @@ import scala.util.Random
 class VoterModel(
   val social: Double = 1.0,
   val cognitive: Double = 1.0,
-  val temperature: Double = 1.0,
   val numNodes: Int = 100,
   val numConcepts: Int = 10) {
 
@@ -52,7 +51,6 @@ class VoterModel(
 
   // i and j are concept indices, value can be 1 or -1
   // returns difference in energy
-  // TODO: missing normalisation in cognitive energy?
   def updateBelief(x: Node, i: Int, j: Int, value: Int)
       : (Double, Double) = {
     // assume(i != j)
@@ -106,7 +104,7 @@ class VoterModel(
     val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
-    val q = scala.math.exp(-energydiff / temperature)
+    val q = scala.math.exp(-energydiff)
     if (energydiff <= 0 || rnd.nextDouble <= q) (sediff, cediff)
     else { updateBelief(x, i, j, w); (0.0, 0.0) } // backtrack
   }
@@ -115,7 +113,7 @@ class VoterModel(
     val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
-    val q = scala.math.exp(-energydiff / temperature)
+    val q = scala.math.exp(-energydiff)
     if (energydiff > 0 && rnd.nextDouble > q)
       updateBelief(x, i, j, w) // backtrack
     (x, i, j, w, v)
@@ -125,7 +123,7 @@ class VoterModel(
     val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
-    val q = scala.math.exp(-energydiff / temperature)
+    val q = scala.math.exp(-energydiff)
     if (energydiff <= 0 || rnd.nextDouble <= q)
       (x, i, j, w, v, sediff, cediff)
     else {
@@ -138,18 +136,37 @@ class VoterModel(
 object VoterModel {
 
   // model parameters
-  val numReps = 1000
+  val numReps = 10000
   val numSteps = 200000
-  val meanDegree = 10.0
-  var cognitive = 2.5 // 3.75 for equal social and cognitive
-                      // minimum energy (see google doc)
-  val social = 1.0
-  val temperature = 1.0
+  var cognitive = 1.0
+  var social = 1.0
   val numNodes = 100
+  val meanDegree = 5.0
+  val numEdges = 250 // about 5 per node
   val numConcepts = 10
 
-  def runOnceEnergy: Unit = {
-    val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
+  def numBeliefs = numConcepts * (numConcepts-1) / 2
+  def numTriangles = numConcepts * (numConcepts-1) * (numConcepts-2) / 6
+
+  // global minimum energy
+  // G = -(2 (M choose 2) E I + (M choose 3) N J)
+  def minSocEnergy: Double = -numBeliefs * numEdges * social * 2
+  def minCogEnergy: Double = -numTriangles * numNodes * cognitive
+  def minimumEnergy: Double = minSocEnergy + minCogEnergy
+
+  // given a fixed minimum energy and a ratio between social and
+  // cognitive (I/J), compute the values for social and cognitive
+  def setTemp(minEnergy: Double, ratio: Double): Unit = {
+    // I = -G / [M (M-1) [E + ((M-2) N)/(6 R)]] (check google docs)
+    social = -minEnergy/(numConcepts*(numConcepts-1)*(
+      numEdges+((numConcepts-2)*numNodes)/(6*ratio)))
+    cognitive = social/ratio
+  }
+
+  // TODO: check evolution of rejection rate vs energy
+
+  def runOnceEnergy(fileName: String): Unit = {
+    val m = new VoterModel(social, cognitive, numNodes, numConcepts)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
@@ -157,38 +174,31 @@ object VoterModel {
     // track social and cognitive energy
     var se = m.socialEnergy
     var ce = m.cognitiveEnergy
-    println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
-    println("time total soc cog")
+    writeToFile (fileName) { out =>
+      out.println(s"# N=$numNodes K=$meanDegree M=$numConcepts I=$social J=$cognitive ")
+      out.println("time total soc cog")
+      out.println(s"0 ${se+ce} $se $ce")
+    }
     // run simulation
-    for (sc <- 0 until numSteps) {
-      println(s"$sc ${se+ce} $se $ce")
+    for (sc <- 1 to numSteps) {
       val (sediff, cediff) = m.step(rnd)
       se += sediff
       ce += cediff
-    }
-    println(s"$numSteps ${se+ce} $se $ce")
-  }
-
-  def using[A <: java.io.Closeable, B](a: A)(f: A => B): B =
-    try { f(a) } finally { a.close() }
-
-  def writeToFile(fileName: String, append: Boolean = false)(
-    op: java.io.PrintWriter => Unit): Unit =
-    using (new java.io.FileWriter(fileName, append)) { fileWriter =>
-      using (new java.io.PrintWriter(fileWriter)) { printWriter =>
-        op(printWriter)
+      writeToFile (fileName, true) { out =>
+        out.println(s"$sc ${se+ce} $se $ce")
       }
     }
+  }
 
   def runManyEnergy(start: Double, end: Double, step: Double,
     fileName: String): Unit = {
     writeToFile (fileName) { out =>
-      out.println(s"# I=$social T=$temperature <d>=$meanDegree numSteps=$numSteps numReps=$numReps")
+      out.println(s"# N=$numNodes K=$meanDegree M=$numConcepts I=$social numSteps=$numSteps numReps=$numReps")
       out.print("J \"mean final social energy\" \"standard deviation social energy\" ")
       out.print("\"mean final cognitive energy\" \"standard deviation cognitive energy\" ")
       out.println("\"mean final total energy\" \"standard deviation total energy\"")
     }
-    for (c <- start to end by step) { // 0.5 to 0.991 by .01) {
+    for (c <- start to end by step) {
       cognitive = c
       // sum of the energies and their squares
       // to compute the mean and standard deviation
@@ -199,13 +209,13 @@ object VoterModel {
       var csum = 0.0
       var sqcsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
+        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
         // create random initial graph
         val rnd = new Random()
         // about 10 friends per node
         m.randomised(meanDegree / m.numNodes, rnd)
         // run simulation
-        for (sc <- 0 until numSteps) m.step(rnd)
+        for (_ <- 1 to numSteps) m.step(rnd)
         // accumulate the energies
         val se = m.socialEnergy
         ssum += se
@@ -319,7 +329,7 @@ object VoterModel {
       (n.toDouble / numDissidents) * (1.0 - shared(m, i, j))).sum
 
   def runOnceOpt(fileName: String): Unit = {
-    val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
+    val m = new VoterModel(social, cognitive, numNodes, numConcepts)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
@@ -350,7 +360,7 @@ object VoterModel {
     var ce = m.cognitiveEnergy
     // run simulation
     writeToFile (fileName) { out =>
-      out.println(s"# I=$social J=$cognitive T=$temperature <d>=$meanDegree")
+      out.println(s"# N=$numNodes K=$meanDegree M=$numConcepts I=$social J=$cognitive")
       out.print("time optimal \"distinct optimal\" \"total homogeneity\" ")
       out.print("\"optimal homogeneity\" \"total dissent\" \"optimal dissent\" ")
       out.print("\"total dissidents\" \"optimal dissidents\" total soc cog ")
@@ -421,25 +431,10 @@ object VoterModel {
     }
   }
 
-  // TODO: it would be nice to make a video of the changing histogram
-  // (or ranking?) of the number of individuals in each distinct
-  // cognitive state.
-  // together with a matrix that tells you have many shared beliefs
-  // each pair of distinct cognitive states have.
-  // possible observable: take the most populated cognitive state
-  // and count 1 for each individual in it + the fraction of shared
-  // beliefs times the number of the individuals in each different
-  // cognitive state. so: \sum_{c \in C} s(c) * n(c)
-  // with s(c) the number of shared beliefs between c and the most
-  // populated cognitive state c\st (this is 1 when c = c\st) and
-  // n(c) the number of individuals in that state.
-  // it should be equivalent to \sum_{v \in V} s(v)
-  // with s(v) the number of shared beliefs between node v and c\st.
-
   def runManyOpt(start: Double, end: Double, step: Double,
     fileName: String): Unit = {
     writeToFile (fileName) { out =>
-      out.println(s"# N=$numNodes M=$numConcepts I=$social T=$temperature K=$meanDegree")
+      out.println(s"# N=$numNodes K=$meanDegree M=$numConcepts I=$social numSteps=$numSteps numReps=$numReps")
       out.print("J \"mean final optimal count\" ")
       out.print("\"standard deviation optimal count\" ")
       out.print("\"mean final distinct optimal count\" ")
@@ -447,25 +442,24 @@ object VoterModel {
     }
     for (c <- start to end by step) {
       cognitive = c
-      // sum of the energies and their squares
+      // sum of the observables and their squares
       // to compute the mean and standard deviation
+      // number of cog-optimal nodes
       var osum = 0.0
       var sqosum = 0.0
+      // number of distinct optimal cogstates
       var dsum = 0.0
       var sqdsum = 0.0
       // homogeneity observable
       var hsum = 0.0
       var sqhsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, temperature, numNodes, numConcepts)
+        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
         // create random initial graph
         val rnd = new Random()
-        // about 10 friends per node
         m.randomised(meanDegree / m.numNodes, rnd)
         // run simulation
-        for (sc <- 0 until numSteps) {
-          val (x, i, j, w, v) = m.stepDiff(rnd)
-        }
+        for (_ <- 1 to numSteps) m.step(rnd)
         // observe final state
         initCogstates(m)
         val o = opts
@@ -488,6 +482,22 @@ object VoterModel {
       }
     }
   }
+
+  // auxiliary functions
+
+  def using[A <: java.io.Closeable, B](a: A)(f: A => B): B =
+    try { f(a) } finally { a.close() }
+
+  def writeToFile(fileName: String, append: Boolean = false)(
+    op: java.io.PrintWriter => Unit): Unit =
+    using (new java.io.FileWriter(fileName, append)) { fileWriter =>
+      using (new java.io.PrintWriter(fileWriter)) { printWriter =>
+        op(printWriter)
+      }
+    }
+
+
+  // drawing functions
 
   // https://en.wikibooks.org/wiki/Color_Theory/Color_gradient
   // https://stackoverflow.com/questions/26106695/converting-int-value-to-a-color-in-a-gradient
