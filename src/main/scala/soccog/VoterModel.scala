@@ -76,15 +76,6 @@ class VoterModel(
   def energy: Double =
     (for (x <- nodes) yield x.energy).sum
 
-  def randomised(linkProb: Double, rnd: Random): Unit = {
-    for (x <- nodes; y <- nodes if (x != y) && (rnd.nextDouble < linkProb))
-      x befriend y
-    for (x <- nodes; i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
-      x.beliefs(i)(j) = rnd.nextInt(3) - 1
-      x.beliefs(j)(i) = x.beliefs(i)(j)
-    }
-  }
-
   // pick a node and a belief at random
   def randomBeliefChange(rnd: Random): (Node, Int, Int, Int, Int) = {
     val x = nodes(rnd.nextInt(numNodes))
@@ -128,6 +119,29 @@ class VoterModel(
       (x, i, j, w, v, 0.0, 0.0)
     }
   }
+
+  def randomiseCogstates(rnd: Random): Unit = {
+    for (x <- nodes; i <- 0 until numConcepts; j <- (i+1) until numConcepts) {
+      x.beliefs(i)(j) = rnd.nextInt(3) - 1
+      x.beliefs(j)(i) = x.beliefs(i)(j)
+    }
+  }
+
+  def randomiseFriendsP(linkProb: Double, rnd: Random): Unit = {
+    for (x <- nodes; y <- nodes if (x != y) && (rnd.nextDouble < linkProb))
+      x befriend y
+  }
+
+  def randomiseFriendsE(numEdges: Int, rnd: Random): Unit = {
+    for (_ <- 1 to numEdges) {
+      val x = rnd.nextInt(numNodes)
+      var y = rnd.nextInt(numNodes)
+      val n = nodes(x)
+      while ((x == y) || n.friends(nodes(y)))
+        y = rnd.nextInt(numNodes)
+      n befriend nodes(y)
+    }
+  }
 }
 
 object VoterModel {
@@ -167,7 +181,8 @@ object VoterModel {
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
-    m.randomised(meanDegree / m.numNodes, rnd)
+    m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
+    m.randomiseCogstates(rnd)
     // track social and cognitive energy
     var se = m.socialEnergy
     var ce = m.cognitiveEnergy
@@ -210,7 +225,8 @@ object VoterModel {
         // create random initial graph
         val rnd = new Random()
         // about 10 friends per node
-        m.randomised(meanDegree / m.numNodes, rnd)
+        m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
+        m.randomiseCogstates(rnd)
         // run simulation
         for (_ <- 1 to numSteps) m.step(rnd)
         // accumulate the energies
@@ -330,7 +346,8 @@ object VoterModel {
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
-    m.randomised(meanDegree / m.numNodes, rnd)
+    m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
+    m.randomiseCogstates(rnd)
     // observables
     initCogstates(m)
     // memoised version of shared
@@ -454,7 +471,8 @@ object VoterModel {
         val m = new VoterModel(social, cognitive, numNodes, numConcepts)
         // create random initial graph
         val rnd = new Random()
-        m.randomised(meanDegree / m.numNodes, rnd)
+        m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
+        m.randomiseCogstates(rnd)
         // run simulation
         for (_ <- 1 to numSteps) m.step(rnd)
         // observe final state
