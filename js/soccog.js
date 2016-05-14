@@ -24,8 +24,8 @@ function choose(n, k) {
 }
 
 var colour = d3.scale.linear()
-  .domain([   0,    0.2,     0.4,       0.6,      0.8,       1])
-  .range(["red", "blue", "green", "#ff00ff", "yellow", "white"]);
+  .domain([     0,    0.2,   0.4,     0.6,      0.8,       1])
+  .range(["black", "blue", "red", "green", "yellow", "white"]);
 
 // var numCogstates = 200;
 // var rainbow = d3.scale.linear()
@@ -202,39 +202,27 @@ function randomBelief() {
 
 function updateBelief(x, i, j, v) {
   var sediff = 0.0, // social energy difference
-      cediff = 0.0; // cognitive energy difference
+      cediff = 0.0, // cognitive energy difference
+      diff = nodes[x].beliefs[i][j] - v;
 
   for (var k = 0; k < params.M; k++) {
     if ((k != i) && (k != j))
-      cediff += nodes[x].beliefs[i][j] *
-                nodes[x].beliefs[j][k] *
+      cediff += nodes[x].beliefs[j][k] *
                 nodes[x].beliefs[k][i];
   }
   for (k = 0; k < links.length; k++) {
-    if ((links[k].source == nodes[x]) ||
-        (links[k].target == nodes[x]))
-      sediff += links[k].source.beliefs[i][j] *
-                links[k].target.beliefs[i][j] * 2;
+    if (links[k].source == nodes[x])
+      sediff += links[k].target.beliefs[i][j] * 2;
+    else if (links[k].target == nodes[x])
+      sediff += links[k].source.beliefs[i][j] * 2;
   }
 
   nodes[x].beliefs[i][j] = v;
   nodes[x].beliefs[j][i] = v;
 
-  for (k = 0; k < params.M; k++) {
-    if ((k != i) && (k != j))
-      cediff -= nodes[x].beliefs[i][j] *
-                nodes[x].beliefs[j][k] *
-                nodes[x].beliefs[k][i];
-  }
-  for (k = 0; k < links.length; k++) {
-    if ((links[k].source == nodes[x]) ||
-        (links[k].target == nodes[x]))
-      sediff -= links[k].source.beliefs[i][j] *
-                links[k].target.beliefs[i][j] * 2;
-  }
-
-  return { social: sediff * params.I, cognitive: cediff * params.J,
-           total: sediff * params.I + cediff * params.J };
+  var soc = sediff * params.I * diff,
+      cog = cediff * params.J * diff;
+  return { social: soc, cognitive: cog, total: soc + cog };
 }
 
 function step() {
@@ -267,7 +255,11 @@ function nextEvent() {
     var rr = parseInt($("input[name=refresh-rate]").val());
     var diff = step();
     while (rr != 0) {
-      while (diff.successful == false) diff = step();
+      while (diff.successful == false) {
+        console.assert(diff.total > 0.0,
+          "rejection with negative energy difference");
+        diff = step();
+      }
 
       // update links
       for (var k = 0; k < links.length; k++) {
