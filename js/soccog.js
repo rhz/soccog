@@ -27,11 +27,6 @@ var colour = d3.scale.linear()
   .domain([     0,    0.2,   0.4,     0.6,      0.8,       1])
   .range(["black", "blue", "red", "green", "yellow", "white"]);
 
-// var numCogstates = 200;
-// var rainbow = d3.scale.linear()
-//   .domain([0, numCogstates/7, numCogstates*2/7, numCogstates*3/7, numCogstates*4/7, numCogstates*5/7, numCogstates*6/7, numCogstates])
-//   .range(["black", "red", "blue", "green", "#ff00ff", "#00ffff", "yellow", "white"]); // yellow is #ffff00
-
 // function cogfraction(n) {
 //   return (numTriangles - (n.cognitive/params.J)) / (2*numTriangles);
 // }
@@ -225,7 +220,11 @@ function updateBelief(x, i, j, v) {
   return { social: soc, cognitive: cog, total: soc + cog };
 }
 
+var steps = 0,
+    fails = 0;
+
 function step() {
+  steps++;
   var rnd = randomBelief(),
       energydiff = updateBelief(rnd.node, rnd.i, rnd.j, rnd.newvalue),
       successful = true;
@@ -256,6 +255,7 @@ function nextEvent() {
     var diff = step();
     while (rr != 0) {
       while (diff.successful == false) {
+        fails++;
         console.assert(diff.total > 0.0,
           "rejection with negative energy difference");
         diff = step();
@@ -300,6 +300,37 @@ function nextEvent() {
         cogstateCount[id] = 1;
       }
       cogstateIdOfNode[diff.node] = id;
+
+      // update rejection rate plot
+      if (steps >= 500) {
+        addPoint(fails/steps);
+        steps = 0;
+        fails = 0;
+        // compress if necessary
+        // var sel = rej.selectAll(".plotline");
+        // var lines = sel[0];
+        // if (lines.length >= 60) {
+        //   var i = 0, newlines = [];
+        //   while (i < lines.length-1) {
+        //     newlines.push({ x1: lines[i].x1, y1: lines[i].y1,
+        //                     x2: lines[i+1].x2, y2: lines[i+1].y2 });
+        //     i += 2;
+        //   }
+        //   if (i == lines.length-1)
+        //     newlines.push({ x1: lines[i].x1, y1: lines[i].y1,
+        //                     x2: lines[i].x2, y2: lines[i].y2 });
+        //   np = newlines.length;
+        //   sel.remove();
+        //   // FIXME: why does it work ok with x1 and x2 but not y1 and y2
+        //   rej.selectAll(".plotline")
+        //     .data(newlines)
+        //     .enter()
+        //     .append("line")
+        //     .attr("class", "plotline")
+        //     .attr("y1", function(d) { return d.y1.baseVal.value; })
+        //     .attr("y2", function(d) { return d.y2.baseVal.value; });
+        // }
+      }
 
       // decrease refresh rate
       rr -= 1;
@@ -399,6 +430,7 @@ function nodeText(n) {
 }
 
 function restart() {
+  active = false;
   initParams();
   initNodes(params.N, params.M);
   initLinks(params.N, params.K);
@@ -408,6 +440,13 @@ function restart() {
     .domain([-numTriangles*params.J, numTriangles*params.J])
     .range([1, 0]);
 
+  np = 0;
+  last = 0;
+
+  rej.selectAll(".plotline").remove();
+  svg.selectAll(".link").remove();
+  svg.selectAll(".node").remove();
+
   force = d3.layout.force()
     .charge(-80)
     .linkDistance(linkDistance)
@@ -416,8 +455,6 @@ function restart() {
     .nodes(nodes)
     .links(links)
     .start();
-
-  svg.empty();
 
   var link = svg.selectAll(".link")
     .data(links)
@@ -451,26 +488,70 @@ function restart() {
   });
 }
 
+var rej = null,
+    rejw = 200,
+    rejh = 200,
+    xscale = null,
+    yscale = null,
+    np = 0, // number of points in plot
+    last = 0; // last point in plot
+
 $(document).ready(function() {
-  svg = d3.select("#svg-div").append("svg")
+  // add graph visualisation
+  svg = d3.select("#graph-div").append("svg")
     .style("border-radius", "5px")
     .style("border", "2px solid #73AD21")
     .attr("width", "100%")
     .attr("height", height);
   width = svg.node().getBoundingClientRect().width;
-  karate();
-  // restart();
+  // add rejection rate plot
+  var margin = { top: 10, right: 10, bottom: 20, left: 30 };
+  rej = d3.select("#rejection-plot-div").append("svg")
+    .attr("width", "100%")
+    .attr("height", rejh + margin.top + margin.bottom);
+  rejw = rej.node().getBoundingClientRect().width - margin.left - margin.right;
+  rej = rej.append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  xscale = d3.scale.linear().domain([0, 1]).range([0, rejw]);
+  yscale = d3.scale.linear().domain([0, 1]).range([rejh, 0]);
+  var xaxis = d3.svg.axis().scale(xscale).ticks(0);
+  rej.append("g")
+    .attr("class", "axis")
+    .attr("transform", "translate(0," + rejh + ")")
+    .call(xaxis);
+  var yaxis = d3.svg.axis().scale(yscale).ticks(2).orient("left");
+  rej.append("g")
+    .attr("class", "axis")
+    .call(yaxis)
+    .append("text")
+    .attr("x", 10)
+    .style("text-anchor", "start")
+    .text("Rejection rate");
+  // draw graph
+  karate(); // restart();
 });
+
+function addPoint(neu) {
+  np++;
+  rej.selectAll(".plotline")
+    .attr("x1", function(d,i) { return xscale(i/np); })
+    .attr("x2", function(d,i) { return xscale((i+1)/np); });
+  rej.append("line")
+    .attr("class", "plotline")
+    .attr("x1", xscale((np-1)/np))
+    .attr("y1", yscale(last))
+    .attr("x2", xscale(1))
+    .attr("y2", yscale(neu));
+  last = neu;
+}
 
 // TODO: it would be nice to have a live histogram of the
 // number of individuals in each distinct cognitive state
 // and maybe also a matrix that tells you have many shared beliefs
 // each pair of distinct cognitive states have.
 
-// TODO: how do we plot the results of many simulations?
-function plot() {}
-
 function karate() {
+  active = false;
   initParams();
   params.N = 34;
   initNodes(params.N, params.M);
@@ -571,6 +652,13 @@ function karate() {
     .domain([-numTriangles*params.J, numTriangles*params.J])
     .range([1, 0]);
 
+  np = 0;
+  last = 0;
+
+  rej.selectAll(".plotline").remove();
+  svg.selectAll(".link").remove();
+  svg.selectAll(".node").remove();
+
   force = d3.layout.force()
     .charge(-80)
     .linkDistance(linkDistance)
@@ -579,8 +667,6 @@ function karate() {
     .nodes(nodes)
     .links(links)
     .start();
-
-  svg.empty();
 
   var link = svg.selectAll(".link")
     .data(links)
