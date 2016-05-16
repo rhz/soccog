@@ -1,0 +1,28 @@
+.node {
+  stroke: #000;
+  stroke-width: 0.5px;
+}
+
+.link {
+  stroke: #999;
+  stroke-opacity: .6;
+}
+
+.plotline {
+  stroke: steelblue;
+  stroke-width: 1;
+}
+
+.axis {
+  shape-rendering: crispEdges;
+}
+
+.axis line {
+  stroke: grey;
+}
+
+.axis path {
+  stroke: grey;
+  stroke-width: 1;
+  fill: none;
+}
