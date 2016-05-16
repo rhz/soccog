@@ -306,30 +306,6 @@ function nextEvent() {
         addPoint(fails/steps);
         steps = 0;
         fails = 0;
-        // compress if necessary
-        // var sel = rej.selectAll(".plotline");
-        // var lines = sel[0];
-        // if (lines.length >= 60) {
-        //   var i = 0, newlines = [];
-        //   while (i < lines.length-1) {
-        //     newlines.push({ x1: lines[i].x1, y1: lines[i].y1,
-        //                     x2: lines[i+1].x2, y2: lines[i+1].y2 });
-        //     i += 2;
-        //   }
-        //   if (i == lines.length-1)
-        //     newlines.push({ x1: lines[i].x1, y1: lines[i].y1,
-        //                     x2: lines[i].x2, y2: lines[i].y2 });
-        //   np = newlines.length;
-        //   sel.remove();
-        //   // FIXME: why does it work ok with x1 and x2 but not y1 and y2
-        //   rej.selectAll(".plotline")
-        //     .data(newlines)
-        //     .enter()
-        //     .append("line")
-        //     .attr("class", "plotline")
-        //     .attr("y1", function(d) { return d.y1.baseVal.value; })
-        //     .attr("y2", function(d) { return d.y2.baseVal.value; });
-        // }
       }
 
       // decrease refresh rate
