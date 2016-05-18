@@ -8,8 +8,23 @@
   stroke-opacity: .6;
 }
 
-.plotline {
+.rejline {
   stroke: steelblue;
+  stroke-width: 1;
+}
+
+.cogline {
+  stroke: blue;
+  stroke-width: 1;
+}
+
+.socline {
+  stroke: lime;
+  stroke-width: 1;
+}
+
+.totline {
+  stroke: cyan;
   stroke-width: 1;
 }
 

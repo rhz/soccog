@@ -33,16 +33,17 @@ var colour = d3.scale.linear()
 
 var width = 800,
     height = 600,
-    params = {},
-    numBeliefs = 0,
-    numTriangles = 0,
-    nodes = [],
-    links = [],
     svg = null,
     force = null,
     active = false,
     cogfraction = null,
     nodeColouring = 0;
+
+var params = {},
+    numBeliefs = 0,
+    numTriangles = 0,
+    nodes = [],
+    links = [];
 
 function initParams() {
   params = {
@@ -107,6 +108,10 @@ function count(m) {
   }
   return r / numBeliefs;
 }
+
+var cognitiveEnergy = 0,
+    socialEnergy = 0,
+    totalEnergy = 0;
 
 // computes the individual cognitive energy
 // m is the belief matrix
@@ -246,6 +251,7 @@ function step() {
 // GUI callbacks
 function start() {
   active = true;
+  plotRate = parseInt($("input[name=plot-rate]").val());
   nextEvent();
 }
 
@@ -301,11 +307,17 @@ function nextEvent() {
       }
       cogstateIdOfNode[diff.node] = id;
 
-      // update rejection rate plot
-      if (steps >= 500) {
-        addPoint(fails/steps);
+      // update energy
+      cognitiveEnergy += diff.cognitive;
+      socialEnergy += diff.social;
+      totalEnergy += diff.total;
+
+      // update plots
+      if (steps >= plotRate) {
+        addPoints(rej, [fails/steps]);
         steps = 0;
         fails = 0;
+        addPoints(energy, [cognitiveEnergy, socialEnergy, totalEnergy]);
       }
 
       // decrease refresh rate
@@ -316,11 +328,6 @@ function nextEvent() {
 }
 
 function waitGUI(diff) {
-  // if (force.alpha() > 0.028) {
-  //   setTimeout(function() { waitGUI(diff); }, 200);
-  // } else {
-  //   updateGUI(diff);
-  // }
   var delay = parseFloat($("input[name=delay]").val());
   setTimeout(function() { updateGUI(diff); }, delay);
 }
@@ -405,21 +412,64 @@ function nodeText(n) {
   return n.name;
 }
 
-function restart() {
-  active = false;
-  initParams();
-  initNodes(params.N, params.M);
-  initLinks(params.N, params.K);
-  initCogstates();
+function minSocialEnergy() {
+  return -numBeliefs * links.length * params.I * 2;
+}
+
+function minCognitiveEnergy() {
+  return -numTriangles * params.N * params.J;
+}
+
+// global minimum energy
+// G = -(2 (M choose 2) E I + (M choose 3) N J)
+function minTotalEnergy() {
+  return minSocialEnergy() + minCognitiveEnergy();
+}
+
+function reset() {
+  cognitiveEnergy = 0;
+  for (var i = 0; i < nodes.length; i++) {
+    cognitiveEnergy += nodes[i].cognitive;
+  }
+  socialEnergy = 0;
+  for (var k = 0; k < links.length; k++) {
+    var src = nodes[links[k].source].beliefs,
+        tgt = nodes[links[k].target].beliefs;
+    for (i = 0; i < params.M; i++) {
+      for (var j = 0; j < params.M; j++) {
+        socialEnergy += src[i][j] * tgt[i][j] * 2;
+      }
+    }
+  }
+  totalEnergy = cognitiveEnergy + socialEnergy;
+
+  rej.np = 0;
+  rej.last = [0];
+  energy.np = 0;
+  energy.last = [cognitiveEnergy, socialEnergy, totalEnergy];
+  xscale = d3.scale.linear().domain([0, 1]).range([0, plotw]);
+
+  rej.selectAll(".axis").remove();
+  rej.yscale = d3.scale.linear().domain([0, 1]).range([ploth, 0]);
+  addAxes(rej, "Rejection rate");
+
+  energy.selectAll(".axis").remove();
+  var minEnergy = minTotalEnergy();
+  energy.yscale = d3.scale.linear()
+    .domain([minEnergy, -minEnergy]).range([ploth, 0]);
+  addAxes(energy, "Energy: " +
+    "<tspan style=\"fill:blue\">cognitive</tspan>, " +
+    "<tspan style=\"fill:lime\">social</tspan>, " +
+    "<tspan style=\"fill:cyan\">total</tspan>");
 
   cogfraction = d3.scale.linear()
     .domain([-numTriangles*params.J, numTriangles*params.J])
     .range([1, 0]);
 
-  np = 0;
-  last = 0;
-
-  rej.selectAll(".plotline").remove();
+  energy.selectAll(".cogline").remove();
+  energy.selectAll(".socline").remove();
+  energy.selectAll(".totline").remove();
+  rej.selectAll(".rejline").remove();
   svg.selectAll(".link").remove();
   svg.selectAll(".node").remove();
 
@@ -464,13 +514,22 @@ function restart() {
   });
 }
 
+function restart() {
+  active = false;
+  initParams();
+  initNodes(params.N, params.M);
+  initLinks(params.N, params.K);
+  initCogstates();
+  reset();
+}
+
 var rej = null,
-    rejw = 200,
-    rejh = 200,
+    energy = null,
+    plotw = 200,
+    ploth = 200,
+    plotRate = 100,
     xscale = null,
-    yscale = null,
-    np = 0, // number of points in plot
-    last = 0; // last point in plot
+    margin = { top: 10, right: 10, bottom: 20, left: 60 };
 
 $(document).ready(function() {
   // add graph visualisation
@@ -480,45 +539,55 @@ $(document).ready(function() {
     .attr("width", "100%")
     .attr("height", height);
   width = svg.node().getBoundingClientRect().width;
-  // add rejection rate plot
-  var margin = { top: 10, right: 10, bottom: 20, left: 30 };
-  rej = d3.select("#rejection-plot-div").append("svg")
+  // add plots
+  energy = addPlot("#energy-plot-div");
+  rej = addPlot("#rejection-plot-div");
+  plotw = rej[0][0].parentNode.getBoundingClientRect().width - margin.left - margin.right;
+  energy.linestyle = ["cogline", "socline", "totline"];
+  rej.linestyle = ["rejline"];
+  // draw graph and axes
+  karate(); // restart();
+});
+
+function addPlot(node) {
+  return d3.select(node).append("svg")
     .attr("width", "100%")
-    .attr("height", rejh + margin.top + margin.bottom);
-  rejw = rej.node().getBoundingClientRect().width - margin.left - margin.right;
-  rej = rej.append("g")
+    .attr("height", ploth + margin.top + margin.bottom)
+    .append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-  xscale = d3.scale.linear().domain([0, 1]).range([0, rejw]);
-  yscale = d3.scale.linear().domain([0, 1]).range([rejh, 0]);
+}
+
+function addAxes(plot, title) {
   var xaxis = d3.svg.axis().scale(xscale).ticks(0);
-  rej.append("g")
+  plot.append("g")
     .attr("class", "axis")
-    .attr("transform", "translate(0," + rejh + ")")
+    .attr("transform", "translate(0," + ploth + ")")
     .call(xaxis);
-  var yaxis = d3.svg.axis().scale(yscale).ticks(2).orient("left");
-  rej.append("g")
+  var yaxis = d3.svg.axis().scale(plot.yscale).ticks(2).orient("left");
+  return plot.append("g")
     .attr("class", "axis")
     .call(yaxis)
     .append("text")
     .attr("x", 10)
     .style("text-anchor", "start")
-    .text("Rejection rate");
-  // draw graph
-  karate(); // restart();
-});
+    .html(title);
+}
 
-function addPoint(neu) {
-  np++;
-  rej.selectAll(".plotline")
-    .attr("x1", function(d,i) { return xscale(i/np); })
-    .attr("x2", function(d,i) { return xscale((i+1)/np); });
-  rej.append("line")
-    .attr("class", "plotline")
-    .attr("x1", xscale((np-1)/np))
-    .attr("y1", yscale(last))
-    .attr("x2", xscale(1))
-    .attr("y2", yscale(neu));
-  last = neu;
+
+function addPoints(plot, points) {
+  plot.np++;
+  for (var i = 0; i < points.length; i++) {
+    plot.selectAll("." + plot.linestyle[i])
+      .attr("x1", function(d,i) { return xscale(i/plot.np); })
+      .attr("x2", function(d,i) { return xscale((i+1)/plot.np); });
+    plot.append("line")
+      .attr("class", plot.linestyle[i])
+      .attr("x1", xscale((plot.np-1)/plot.np))
+      .attr("y1", plot.yscale(plot.last[i]))
+      .attr("x2", xscale(1))
+      .attr("y2", plot.yscale(points[i]));
+    plot.last[i] = points[i];
+  }
 }
 
 // TODO: it would be nice to have a live histogram of the
@@ -624,54 +693,5 @@ function karate() {
                              nodes[tgt].beliefs);
   }
 
-  cogfraction = d3.scale.linear()
-    .domain([-numTriangles*params.J, numTriangles*params.J])
-    .range([1, 0]);
-
-  np = 0;
-  last = 0;
-
-  rej.selectAll(".plotline").remove();
-  svg.selectAll(".link").remove();
-  svg.selectAll(".node").remove();
-
-  force = d3.layout.force()
-    .charge(-80)
-    .linkDistance(linkDistance)
-    .linkStrength(linkStrength)
-    .size([width, height])
-    .nodes(nodes)
-    .links(links)
-    .start();
-
-  var link = svg.selectAll(".link")
-    .data(links)
-    .enter()
-    .append("line")
-    .attr("class", "link")
-    .style("stroke-width", linkWidth);
-
-  link.append("title").text(linkText);
-
-  var node = svg.selectAll(".node")
-    .data(nodes)
-    .enter()
-    .append("circle")
-    .attr("class", "node")
-    .attr("r", 5)
-    .style("fill", nodeColour)
-    .on("click", function(n) { console.log(n); })
-    .call(force.drag);
-
-  node.append("title").text(nodeText);
-
-  force.on("tick", function() {
-    link.attr("x1", function(l) { return l.source.x; })
-        .attr("y1", function(l) { return l.source.y; })
-        .attr("x2", function(l) { return l.target.x; })
-        .attr("y2", function(l) { return l.target.y; });
-
-    node.attr("cx", function(n) { return n.x; })
-        .attr("cy", function(n) { return n.y; });
-  });
+  reset();
 }
