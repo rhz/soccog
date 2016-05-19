@@ -427,6 +427,13 @@ function minTotalEnergy() {
 }
 
 function reset() {
+  energy.selectAll("line").remove();
+  energy.selectAll(".axis").remove();
+  rej.selectAll("line").remove();
+  rej.selectAll(".axis").remove();
+  svg.selectAll(".link").remove();
+  svg.selectAll(".node").remove();
+
   cognitiveEnergy = 0;
   for (var i = 0; i < nodes.length; i++) {
     cognitiveEnergy += nodes[i].cognitive;
@@ -449,11 +456,9 @@ function reset() {
   energy.last = [cognitiveEnergy, socialEnergy, totalEnergy];
   xscale = d3.scale.linear().domain([0, 1]).range([0, plotw]);
 
-  rej.selectAll(".axis").remove();
   rej.yscale = d3.scale.linear().domain([0, 1]).range([ploth, 0]);
   addAxes(rej, "Rejection rate");
 
-  energy.selectAll(".axis").remove();
   var minEnergy = minTotalEnergy();
   energy.yscale = d3.scale.linear()
     .domain([minEnergy, -minEnergy]).range([ploth, 0]);
@@ -465,13 +470,6 @@ function reset() {
   cogfraction = d3.scale.linear()
     .domain([-numTriangles*params.J, numTriangles*params.J])
     .range([1, 0]);
-
-  energy.selectAll(".cogline").remove();
-  energy.selectAll(".socline").remove();
-  energy.selectAll(".totline").remove();
-  rej.selectAll(".rejline").remove();
-  svg.selectAll(".link").remove();
-  svg.selectAll(".node").remove();
 
   force = d3.layout.force()
     .charge(-80)
@@ -563,7 +561,7 @@ function addAxes(plot, title) {
     .attr("class", "axis")
     .attr("transform", "translate(0," + ploth + ")")
     .call(xaxis);
-  var yaxis = d3.svg.axis().scale(plot.yscale).ticks(2).orient("left");
+  var yaxis = d3.svg.axis().scale(plot.yscale).ticks(3).orient("left");
   return plot.append("g")
     .attr("class", "axis")
     .call(yaxis)
