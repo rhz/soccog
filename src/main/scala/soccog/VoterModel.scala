@@ -213,6 +213,156 @@ object VoterModel {
 
   // TODO: check evolution of rejection rate vs energy
 
+  def karate: Unit = {
+    val numNodes = 34
+    val numConcepts = 10
+    val m = new VoterModel(numNodes, numConcepts)
+    for ((i, j) <- List(
+      (1, 2),
+      (1, 3),
+      (2, 3),
+      (1, 4),
+      (2, 4),
+      (3, 4),
+      (1, 5),
+      (1, 6),
+      (1, 7),
+      (5, 7),
+      (6, 7),
+      (1, 8),
+      (2, 8),
+      (3, 8),
+      (4, 8),
+      (1, 9),
+      (3, 9),
+      (3, 10),
+      (1, 11),
+      (5, 11),
+      (6, 11),
+      (1, 12),
+      (1, 13),
+      (4, 13),
+      (1, 14),
+      (2, 14),
+      (3, 14),
+      (4, 14),
+      (6, 17),
+      (7, 17),
+      (1, 18),
+      (2, 18),
+      (1, 20),
+      (2, 20),
+      (1, 22),
+      (2, 22),
+      (24, 26),
+      (25, 26),
+      (3, 28),
+      (24, 28),
+      (25, 28),
+      (3, 29),
+      (24, 30),
+      (27, 30),
+      (2, 31),
+      (9, 31),
+      (1, 32),
+      (25, 32),
+      (26, 32),
+      (29, 32),
+      (3, 33),
+      (9, 33),
+      (15, 33),
+      (16, 33),
+      (19, 33),
+      (21, 33),
+      (23, 33),
+      (24, 33),
+      (30, 33),
+      (31, 33),
+      (32, 33),
+      (9, 34),
+      (10, 34),
+      (14, 34),
+      (15, 34),
+      (16, 34),
+      (19, 34),
+      (20, 34),
+      (21, 34),
+      (23, 34),
+      (24, 34),
+      (27, 34),
+      (28, 34),
+      (29, 34),
+      (30, 34),
+      (31, 34),
+      (32, 34),
+      (33, 34)))
+      m.nodes(i-1) befriend m.nodes(j-1)
+    val rnd = new Random()
+    val start = 0.0
+    val end = 0.001
+    val step = 0.01
+    val reset = 100000
+    val convergenceThresh = 0.99999
+    val numReps = 100
+    val formatter = new java.text.DecimalFormat("#.###")
+    val baseName = "karate/M" + numConcepts + "C" + convergenceThresh
+    val minEnergy = m.minEnergy
+    println(minEnergy)
+    for (logratio <- start to end by step) {
+      m.setTemp(minEnergy, scala.math.pow(numConcepts, logratio))
+      val freq = mutable.Map.empty[(m.Node, m.Node), Int].withDefaultValue(0)
+      def prob(n1: m.Node, n2: m.Node): Double =
+        if (n1 == n2) 1.0
+        else (freq((n1, n2)) max freq((n2, n1))).toDouble/numReps
+      def entropy(n1: m.Node): Double =
+        -(for (n2 <- m.nodes; p = prob(n1, n2)) yield log(p)*p).sum
+      def writeOutput = {
+        val nodeId = m.nodes.zipWithIndex.toMap
+        writeToFile (baseName + "-entropy-" + formatter.format(logratio) + ".out") { out =>
+          for (n1 <- m.nodes)
+            out.println(s"${nodeId(n1)}: ${entropy(n1)}")
+        }
+        writeToFile (baseName + "-" + formatter.format(logratio) + ".out") { out =>
+          for (n1 <- m.nodes)
+            out.println((for (n2 <- m.nodes) yield prob(n1, n2)).mkString(" "))
+        }
+      }
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        override def run() { writeOutput }
+      });
+      for (_ <- 1 to numReps) {
+        m.randomiseCogstates(rnd)
+        var steps = 1
+        var fails = 0
+        while (fails.toDouble/steps < convergenceThresh) {
+          steps = 0
+          fails = 0
+          for (_ <- 1 to reset) {
+            if (m.step(rnd).isEmpty) fails += 1
+            steps += 1
+          }
+          // println(s"$fails $steps ${fails.toDouble/steps}")
+          // print(".")
+        }
+        // println()
+        // compute probability that any two nodes are in the same group
+        initCogstates(m)
+        // println(cogstateCount)
+        for (Array(n1, n2) <- m.nodes.combinations(2)) {
+          if (cogstateIdOfNode(n1) == cogstateIdOfNode(n2))
+            freq((n1, n2)) += 1
+        }
+        print(".")
+      }
+      println()
+      writeOutput
+    }
+  }
+
+  def log(x: Double, base: Int = 2): Double = {
+    return scala.math.log(x) / scala.math.log(base)
+  }
+
   def runOnceEnergy(fileName: String): Unit = {
     val m = new VoterModel(numNodes, numConcepts, social, cognitive)
     // create random initial graph
@@ -787,11 +937,12 @@ object VoterModel {
     // else
     //   println("Usage: VoterModel <start> <end> <step> <minimum energy> <filename>")
     //
-    if (args.size == 4)
-      runManyCogs(args(0).toDouble, args(1).toDouble,
-        args(2).toDouble, args(3))
-    else
-      println("Usage: VoterModel <start> <end> <step> <filename>")
+    // if (args.size == 4)
+    //   runManyCogs(args(0).toDouble, args(1).toDouble,
+    //     args(2).toDouble, args(3))
+    // else
+    //   println("Usage: VoterModel <start> <end> <step> <filename>")
+    karate
   }
 }
 
