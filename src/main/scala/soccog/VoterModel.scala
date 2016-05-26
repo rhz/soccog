@@ -5,10 +5,10 @@ import scala.collection.mutable
 import scala.util.Random
 
 class VoterModel(
-  val social: Double = 1.0,
-  val cognitive: Double = 1.0,
   val numNodes: Int = 100,
-  val numConcepts: Int = 10) {
+  val numConcepts: Int = 10,
+  var social: Double = 1.0,
+  var cognitive: Double = 1.0) {
 
   val nodes: Array[Node] = Array.fill(numNodes)(new Node)
 
@@ -88,7 +88,23 @@ class VoterModel(
     (x, i, j, w, v)
   }
 
-  def step(rnd: Random): (Double, Double) = {
+  case class Step(node: Node, i: Int, j: Int, oldvalue: Int, newvalue: Int,
+    social: Double, cognitive: Double)
+
+  def step(rnd: Random): Option[Step] = {
+    val (x, i, j, w, v) = randomBeliefChange(rnd)
+    val (sediff, cediff) = updateBelief(x, i, j, v)
+    val energydiff = sediff + cediff
+    val q = scala.math.exp(-energydiff)
+    if (energydiff <= 0 || rnd.nextDouble <= q)
+      Some(Step(x, i, j, w, v, sediff, cediff))
+    else {
+      updateBelief(x, i, j, w) // backtrack
+      None
+    }
+  }
+
+  def stepEnergy(rnd: Random): (Double, Double) = {
     val (x, i, j, w, v) = randomBeliefChange(rnd)
     val (sediff, cediff) = updateBelief(x, i, j, v)
     val energydiff = sediff + cediff
@@ -142,6 +158,27 @@ class VoterModel(
       n befriend nodes(y)
     }
   }
+
+  def numBeliefs = numConcepts * (numConcepts-1) / 2
+  def numTriangles = numConcepts * (numConcepts-1) * (numConcepts-2) / 6
+  def numEdges = ((for (n <- nodes) yield n.friends.size).sum / 2).toInt
+
+  // global minimum energy
+  // G = -(2 (M choose 2) E I + (M choose 3) N J)
+  def minSocialEnergy: Double = -numBeliefs * numEdges * social * 2
+  def minCognitiveEnergy: Double = -numTriangles * numNodes * cognitive
+  def minEnergy: Double = minSocialEnergy + minCognitiveEnergy
+
+  // given a fixed minimum energy and a ratio between social and
+  // cognitive (I/J), compute the values for social and cognitive
+  def setTemp(minEnergy: Double, ratio: Double): Unit = {
+    // I = -G / [M (M-1) [E + ((M-2) N)/(6 R)]] (check google docs)
+    social = -minEnergy/(numConcepts*(numConcepts-1)*(
+      numEdges+((numConcepts-2)*numNodes)/(6*ratio)))
+    cognitive = social/ratio
+  }
+
+  def setTemp(ratio: Double): Unit = setTemp(minEnergy, ratio)
 }
 
 object VoterModel {
@@ -177,7 +214,7 @@ object VoterModel {
   // TODO: check evolution of rejection rate vs energy
 
   def runOnceEnergy(fileName: String): Unit = {
-    val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+    val m = new VoterModel(numNodes, numConcepts, social, cognitive)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
@@ -193,7 +230,7 @@ object VoterModel {
     }
     // run simulation
     for (sc <- 1 to numSteps) {
-      val (sediff, cediff) = m.step(rnd)
+      val (sediff, cediff) = m.stepEnergy(rnd)
       se += sediff
       ce += cediff
       writeToFile (fileName, true) { out =>
@@ -221,14 +258,14 @@ object VoterModel {
       var csum = 0.0
       var sqcsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+        val m = new VoterModel(numNodes, numConcepts, social, cognitive)
         // create random initial graph
         val rnd = new Random()
         // about 10 friends per node
         m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
         m.randomiseCogstates(rnd)
         // run simulation
-        for (_ <- 1 to numSteps) m.step(rnd)
+        for (_ <- 1 to numSteps) m.stepEnergy(rnd)
         // accumulate the energies
         val se = m.socialEnergy
         ssum += se
@@ -364,7 +401,7 @@ object VoterModel {
   // Simulation methods that analyse cogstates
 
   def runOnceOpt(fileName: String): Unit = {
-    val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+    val m = new VoterModel(numNodes, numConcepts, social, cognitive)
     // create random initial graph
     val rnd = new Random()
     // about 10 friends per node
@@ -491,13 +528,13 @@ object VoterModel {
       var hsum = 0.0
       var sqhsum = 0.0
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+        val m = new VoterModel(numNodes, numConcepts, social, cognitive)
         // create random initial graph
         val rnd = new Random()
         m.randomiseFriendsP(meanDegree / m.numNodes, rnd)
         m.randomiseCogstates(rnd)
         // run simulation
-        for (_ <- 1 to numSteps) m.step(rnd)
+        for (_ <- 1 to numSteps) m.stepEnergy(rnd)
         // observe final state
         initCogstates(m)
         initOpts(m)
@@ -572,13 +609,13 @@ object VoterModel {
         out.println(s" J=$cognitive numSteps=$numSteps numReps=$numReps")
       }
       for (n <- 1 to numReps) {
-        val m = new VoterModel(social, cognitive, numNodes, numConcepts)
+        val m = new VoterModel(numNodes, numConcepts, social, cognitive)
         // create random initial graph
         val rnd = new Random()
         m.randomiseFriendsE(numEdges, rnd)
         m.randomiseCogstates(rnd)
         // run simulation
-        for (_ <- 1 to numSteps) m.step(rnd)
+        for (_ <- 1 to numSteps) m.stepEnergy(rnd)
         // observe final state
         initCogstates(m)
         // accumulate the energies
